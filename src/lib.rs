@@ -212,7 +212,8 @@ fn generate_json(scenes: Vec<Scene>) {
     let views_metadata = Arc::new(Mutex::new(vec![]));
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(
-        ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}%) [{per_sec:1} {elapsed}/{eta}]")
+        ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}%) \
+                                     [rate: {per_sec:1} | elapsed: {elapsed} | eta: {eta}]")
             .unwrap()
             .progress_chars("█▉▊▋▌▍▎▏  "));
     bar.enable_steady_tick(std::time::Duration::from_millis(50));
