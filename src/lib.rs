@@ -168,10 +168,12 @@ fn generate_json(scenes: Vec<Scene>) {
     bar.set_style(ProgressStyle::with_template(
         "{spinner} {wide_bar} ({percent}) [{per_sec:1} {elapsed}:{eta}]").unwrap());
     bar.enable_steady_tick(std::time::Duration::from_millis(50));
-    scenes
-        .par_iter().panic_fuse()
-        .progress_with(bar)
-        .map(|s| derive_view_metadata(s, Arc::clone(&metadata))).for_each(drop);
+    rayon::ThreadPoolBuilder::new().num_threads(48).build().unwrap().install(|| {
+        scenes
+            .par_iter().panic_fuse()
+            .progress_with(bar)
+            .map(|s| derive_view_metadata(s, Arc::clone(&metadata))).for_each(drop);
+    });
 }
 
 struct ViewMetadata {
