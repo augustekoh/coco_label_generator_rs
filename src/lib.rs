@@ -160,8 +160,6 @@ pub fn main(config: Config) {
 fn generate_json(scenes: Vec<Scene>) {
     let metadata = Arc::new(Mutex::new(vec![]));
     scenes.par_iter().panic_fuse().map(|s| derive_view_metadata(s, Arc::clone(&metadata))).for_each(drop);
-
-    println!("\n\n\n\nAAAAAAAAAAAAAAAAAAAAAAA\n\n\n");
 }
 
 struct ViewMetadata {
