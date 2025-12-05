@@ -131,6 +131,7 @@ impl FromStr for TrainValTestSplit {
 
 #[derive(Serialize)]
 pub struct Config {
+    pub exec_version: String,
     pub output_dir_path: PathBuf,
     pub data_input_dir_path: PathBuf,
     pub split: TrainValTestSplit,
