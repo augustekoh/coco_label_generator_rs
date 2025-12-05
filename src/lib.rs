@@ -321,7 +321,7 @@ fn check_count_in_csv(view: &View, expected_low_bound_on_max: usize) {
             assert_eq!(count_cols.unwrap(), cols);
         }
     };
-    assert!(expected_low_bound_on_max <= count_records);
+    assert!(expected_low_bound_on_max <= count_records, "{} > {}", expected_low_bound_on_max, count_records);
 }
 
 fn bounding_box<T: Eq>(arr: &Array2<T>, target: &T) -> Bboxx1y1x2y2 {
