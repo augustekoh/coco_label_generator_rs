@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
-use indicatif::ParallelProgressIterator;
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use ndarray::Array2;
 use ndarray_npy::NpzReader;
 use rand::seq::SliceRandom;
@@ -164,9 +164,12 @@ pub fn main(config: Config) {
 
 fn generate_json(scenes: Vec<Scene>) {
     let metadata = Arc::new(Mutex::new(vec![]));
+    let bar = ProgressBar::new(scenes.len().try_into().unwrap());
+    bar.set_style(ProgressStyle::with_template("{spinner} {bar} ({percent}) [{elapsed}:{eta}]").unwrap());
+    bar.enable_steady_tick(std::time::Duration::from_millis(250));
     scenes
         .par_iter().panic_fuse()
-        .progress_count(scenes.len().try_into().unwrap())
+        .progress_with(bar)
         .map(|s| derive_view_metadata(s, Arc::clone(&metadata))).for_each(drop);
 }
 
