@@ -170,7 +170,7 @@ impl View {
 
 pub fn main(config: Config) {
     assert!(!config.output_dir_path.exists());
-    println!("{}", serde_json::to_string(&config).unwrap());
+    println!("{}", serde_json::to_string_pretty(&config).unwrap());
     let mut scenes = vec![];
     for entry in std::fs::read_dir(&config.data_input_dir_path).unwrap() {
         let entry = entry.unwrap();
