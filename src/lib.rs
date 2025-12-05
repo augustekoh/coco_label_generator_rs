@@ -55,6 +55,7 @@ impl From<ObjectViewId> for OrderIdx {
 struct ObjectViewId(u32);
 
 #[derive(Serialize, Debug)]
+#[serde(transparent)]
 struct Proportion {
     inner: f64,
 }
