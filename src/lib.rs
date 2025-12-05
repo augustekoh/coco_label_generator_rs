@@ -41,6 +41,11 @@ impl From<f32> for InstancesObjectsValue {
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
 struct ObjectViewId(u8);
+impl ObjectViewId {
+    fn raw_id(&self) -> u8 {
+        self.0
+    }
+}
 
 #[derive(Serialize, Debug)]
 struct Proportion {
@@ -138,6 +143,7 @@ impl Scene {
 struct View {
     rgb_path: PathBuf,
     npz_path: PathBuf,
+    /// One entry per object, regardless of whether the object is visible.
     order_v2_csv_path: PathBuf,
 }
 impl View {
@@ -281,10 +287,10 @@ fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) 
             r
         });
         let mut visible_and_bboxes = HashMap::new();
-        for id in visible.into_iter() {
-            visible_and_bboxes.insert(id, bounding_box(&arr, &InstancesObjectsValue::Object(id)));
+        for id in visible.iter() {
+            visible_and_bboxes.insert(*id, bounding_box(&arr, &InstancesObjectsValue::Object(*id)));
         }
-        assert!(check_count_in_csv(&view, visible_and_bboxes.len()));
+        check_count_in_csv(&view, visible.iter().map(|e| e.raw_id()).max().unwrap().try_into().unwrap());
         let parent_to_remove = view.rgb_path
             .parent().expect("Expected at least one parent.")
             .parent().unwrap_or(Path::new(""));
@@ -302,16 +308,20 @@ fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) 
     }
 }
 
-fn check_count_in_csv(view: &View, expected_count: usize) -> bool {
+fn check_count_in_csv(view: &View, expected_max: usize) {
     let mut csv_reader = csv::Reader::from_reader(std::fs::File::open(view.order_v2_csv_path()).unwrap());
     let mut count_records: usize = 0;
+    let mut count_cols = None;
     for rec in csv_reader.records() {
         count_records = count_records.checked_add(1).unwrap();
-        if rec.unwrap().len() != expected_count {
-            return false;
+        let cols = rec.unwrap().len();
+        if let None = count_cols {
+            count_cols = Some(cols);
+        } else {
+            assert_eq!(count_cols.unwrap(), cols);
+            assert!(cols <= expected_max);
         }
     };
-    return count_records == expected_count;
 }
 
 fn bounding_box<T: Eq>(arr: &Array2<T>, target: &T) -> Bboxx1y1x2y2 {
