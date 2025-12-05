@@ -158,7 +158,7 @@ impl Scene {
             })
             .map(|e| View::new(e.unwrap().path()))
             .collect();
-        let re = regex::Regex::new(r"scene([0-9]+)").unwrap();
+        let re = regex::Regex::new(r"^scene([0-9]+)$").unwrap();
         let cap = re.captures(path.file_name().unwrap().to_str().unwrap()).unwrap();
         assert_eq!(cap.len(), 1);
         let id = SceneId::new(cap[0].parse().unwrap());
@@ -180,7 +180,7 @@ impl View {
         let id = rgb_path.file_name().unwrap().to_str().unwrap().split("_").next().unwrap();
         let npz_path = rgb_path.parent().unwrap().join(format!("{}.npz", id));
         let order_v2_csv_path = rgb_path.parent().unwrap().join(format!("{}_order_v2.csv", id));
-        let re = regex::Regex::new(r"([0-9]+)_rgb\.png").unwrap();
+        let re = regex::Regex::new(r"^([0-9]+)_rgb\.png$").unwrap();
         let cap = re.captures(rgb_path.file_name().unwrap().to_str().unwrap()).unwrap();
         assert_eq!(cap.len(), 1);
         let id = ViewId::new(cap[0].parse().unwrap());
