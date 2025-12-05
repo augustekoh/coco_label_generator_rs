@@ -32,7 +32,7 @@ impl From<u8> for InstancesObjectsValue {
 }
 impl From<f32> for InstancesObjectsValue {
     fn from(value: f32) -> Self {
-        assert!(value.is_normal());
+        assert!(value.is_normal() || value == 0.0);
         let r = value as u8;
         assert_eq!(r as f32, value);
         r.into()
