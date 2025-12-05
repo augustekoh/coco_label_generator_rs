@@ -228,12 +228,12 @@ pub fn main(config: Config) {
     let train_scenes = scenes;
 
     std::fs::create_dir_all(&config.output_dir_path).unwrap();
-    generate_json(train_scenes, config.output_dir_path.join("train.json"));
-    generate_json(validation_scenes, config.output_dir_path.join("valid.json"));
-    generate_json(test_scenes, config.output_dir_path.join("test.json"));
+    generate_json(train_scenes, config.output_dir_path.join("train.json"), &mut rng);
+    generate_json(validation_scenes, config.output_dir_path.join("valid.json"), &mut rng);
+    generate_json(test_scenes, config.output_dir_path.join("test.json"), &mut rng);
 }
 
-fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
+fn generate_json<T: rand::Rng>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: &mut T) {
     assert!(!out_json_path.exists());
     let views_metadata = Arc::new(Mutex::new(vec![]));
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
@@ -254,10 +254,12 @@ fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
     let mut views_metadata_serde = vec![];
     let mut views_list = views_metadata.lock().unwrap();
     views_list.sort_by_key(|a| (a.scene_id, a.id));
+    views_list.shuffle(rng);
     for (view_idx, view) in views_list.drain(..).enumerate() {
         if view_idx == usize::MAX { panic!(); }
         let mut obj_list: Vec<AnnotationMetadata> = view.visible.iter().map(|(_, v)| v.clone()).collect();
         obj_list.sort_by_key(|a| (a.scene_id, a.view_id, a.instance_id));
+        obj_list.shuffle(rng);
         for ann in obj_list {
             annotations_metadata_serde.push(AnnotationMetadataSerde::from_ann(
                 ann,
