@@ -3,8 +3,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use ndarray::Array2;
-use ndarray_npy::read_npy;
-use ndarray_npy::ReadNpyExt;
+use ndarray_npy::NpzReader;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
@@ -163,17 +162,18 @@ fn generate_json(scenes: Vec<Scene>) {
 }
 
 struct ViewMetadata {
-    temp: u32,
+    temp: f32,
 }
 impl ViewMetadata {
-    fn new(temp: u32) -> Self {
+    fn new(temp: f32) -> Self {
         Self { temp }
     }
 }
 
 fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) {
     for view in scene.views() {
-        let arr: Array2<u32> = read_npy(view.npz_path()).unwrap();
+        let mut npz = NpzReader::new(std::fs::File::open(view.npz_path()).unwrap()).unwrap();
+        let arr: Array2<f32> = npz.by_name("instances_semantic").unwrap();
         {
             let mut lock = metadata.lock().unwrap();
             lock.push(ViewMetadata::new(arr[[0, 0]]));
