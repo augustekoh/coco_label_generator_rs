@@ -290,7 +290,7 @@ fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) 
         for id in visible.iter() {
             visible_and_bboxes.insert(*id, bounding_box(&arr, &InstancesObjectsValue::Object(*id)));
         }
-        check_count_in_csv(&view, visible.iter().map(|e| e.raw_id()).max().unwrap().try_into().unwrap());
+        check_count_in_csv(&view, visible.iter().map(|e| e.raw_id()).max().unwrap_or(0).try_into().unwrap());
         let parent_to_remove = view.rgb_path
             .parent().expect("Expected at least one parent.")
             .parent().unwrap_or(Path::new(""));
@@ -308,7 +308,7 @@ fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) 
     }
 }
 
-fn check_count_in_csv(view: &View, expected_max: usize) {
+fn check_count_in_csv(view: &View, expected_low_bound_on_max: usize) {
     let mut csv_reader = csv::Reader::from_reader(std::fs::File::open(view.order_v2_csv_path()).unwrap());
     let mut count_records: usize = 0;
     let mut count_cols = None;
@@ -319,9 +319,9 @@ fn check_count_in_csv(view: &View, expected_max: usize) {
             count_cols = Some(cols);
         } else {
             assert_eq!(count_cols.unwrap(), cols);
-            assert!(cols <= expected_max);
         }
     };
+    assert!(expected_low_bound_on_max <= count_records);
 }
 
 fn bounding_box<T: Eq>(arr: &Array2<T>, target: &T) -> Bboxx1y1x2y2 {
