@@ -14,15 +14,15 @@ use rayon::iter::ParallelIterator;
 use serde::Serialize;
 
 
-const OBJECT_VIEW_BACKGROUND_VALUE: u8 = 0;
+const OBJECT_VIEW_BACKGROUND_VALUE: u32 = 0;
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy)]
 enum InstancesObjectsValue {
     Background,
     Object(ObjectViewId),
 }
-impl From<u8> for InstancesObjectsValue {
-    fn from(value: u8) -> Self {
+impl From<u32> for InstancesObjectsValue {
+    fn from(value: u32) -> Self {
         if value == OBJECT_VIEW_BACKGROUND_VALUE {
             Self::Background
         } else {
@@ -33,19 +33,25 @@ impl From<u8> for InstancesObjectsValue {
 impl From<f32> for InstancesObjectsValue {
     fn from(value: f32) -> Self {
         assert!(value.is_normal() || value == 0.0);
-        let r = value as u8;
+        let r = value as u32;
         assert_eq!(r as f32, value);
         r.into()
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
-struct ObjectViewId(u8);
-impl ObjectViewId {
-    fn raw_id(&self) -> u8 {
-        self.0
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Ord, PartialOrd)]
+struct OrderIdx(u32);
+impl OrderIdx {
+    pub fn new(idx: u32) -> Self { Self(idx) }
+}
+impl From<ObjectViewId> for OrderIdx {
+    fn from(value: ObjectViewId) -> Self {
+        Self(value.0.checked_sub(1).unwrap())
     }
 }
+
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
+struct ObjectViewId(u32);
 
 #[derive(Serialize, Debug)]
 struct Proportion {
@@ -290,7 +296,11 @@ fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) 
         for id in visible.iter() {
             visible_and_bboxes.insert(*id, bounding_box(&arr, &InstancesObjectsValue::Object(*id)));
         }
-        check_count_in_csv(&view, visible.iter().map(|e| e.raw_id()).max().unwrap_or(0).try_into().unwrap());
+        check_count_in_csv(
+            &view,
+            visible.iter().map(|e| (*e).into())
+                .max().unwrap_or(OrderIdx::new(0))
+        );
         let parent_to_remove = view.rgb_path
             .parent().expect("Expected at least one parent.")
             .parent().unwrap_or(Path::new(""));
@@ -308,7 +318,7 @@ fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) 
     }
 }
 
-fn check_count_in_csv(view: &View, expected_low_bound_on_max: usize) {
+fn check_count_in_csv(view: &View, expected_low_bound_on_max: OrderIdx) {
     let mut csv_reader = csv::Reader::from_reader(std::fs::File::open(view.order_v2_csv_path()).unwrap());
     let mut count_records: usize = 0;
     let mut count_cols = None;
@@ -321,7 +331,8 @@ fn check_count_in_csv(view: &View, expected_low_bound_on_max: usize) {
             assert_eq!(count_cols.unwrap(), cols);
         }
     };
-    assert!(expected_low_bound_on_max <= count_records, "{} > {}", expected_low_bound_on_max, count_records);
+    let count_records = OrderIdx::new(count_records.try_into().unwrap());
+    assert!(expected_low_bound_on_max <= count_records, "{:?} > {:?}", expected_low_bound_on_max, count_records);
 }
 
 fn bounding_box<T: Eq>(arr: &Array2<T>, target: &T) -> Bboxx1y1x2y2 {
