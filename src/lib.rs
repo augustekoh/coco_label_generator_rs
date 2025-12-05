@@ -205,7 +205,7 @@ pub fn main(config: Config) {
     let validation_scenes = scenes.split_off(train_validation_boundary_u);
     let train_scenes = scenes;
 
-    std::fs::create_dir_all(&config.output_dir_path);
+    std::fs::create_dir_all(&config.output_dir_path).unwrap();
     generate_json(train_scenes, config.output_dir_path.join("train.json"));
     generate_json(validation_scenes, config.output_dir_path.join("valid.json"));
     generate_json(test_scenes, config.output_dir_path.join("test.json"));
@@ -214,6 +214,7 @@ pub fn main(config: Config) {
 fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
     assert!(!out_json_path.exists());
     let views_metadata = Arc::new(Mutex::new(vec![]));
+    let annotations_metadata = Arc::new(Mutex::new(vec![]));
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(
         ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}%) \
@@ -225,7 +226,8 @@ fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
         scenes
             .par_iter().panic_fuse()
             .progress_with(bar)
-            .map(|s| derive_view_metadata(s, Arc::clone(&views_metadata))).for_each(drop);
+            .map(|s| derive_view_metadata(s, Arc::clone(&views_metadata), Arc::clone(&annotations_metadata)))
+            .for_each(drop);
     });
     let json_file_content = serde_json::json!({
         "info": {},
@@ -235,7 +237,7 @@ fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
             {"supercategory": "background", "id": 0, "name": "background"},
             {"supercategory": "foreground", "id": 1, "name": "foreground"}
         ],
-        "annotations": []
+        "annotations": *annotations_metadata.lock().unwrap()
     });
     let mut output_file = std::fs::File::create_new(out_json_path).unwrap();
     output_file.write(serde_json::to_string_pretty(&json_file_content).unwrap().as_bytes()).unwrap();
@@ -247,6 +249,11 @@ struct AnnotationMetadata {
     image_id: usize,
     instance_id: ObjectViewId,
     bbox: Bboxx1y1x2y2,
+}
+impl AnnotationMetadata {
+    fn new(id: usize, image_id: usize, instance_id: ObjectViewId, bbox: Bboxx1y1x2y2) -> Self {
+        Self { id, image_id, instance_id, bbox }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -311,7 +318,8 @@ impl Bboxx1y1x2y2Builder {
     }
 }
 
-fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) {
+fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata>>>,
+                        annotations: Arc<Mutex<Vec<AnnotationMetadata>>>) {
     for view in scene.views() {
         let mut npz = NpzReader::new(std::fs::File::open(view.npz_path()).unwrap()).unwrap();
         let arr_original: Array2<f32> = npz.by_name("instances_objects").unwrap();
@@ -325,26 +333,41 @@ fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) 
         });
         let mut visible_and_bboxes = HashMap::new();
         for id in visible.iter() {
-            visible_and_bboxes.insert(*id, bounding_box(&arr, &InstancesObjectsValue::Object(*id)));
+            let bbox = bounding_box(&arr, &InstancesObjectsValue::Object(*id));
+            visible_and_bboxes.insert(*id, bbox);
         }
         check_count_in_csv(
             &view,
             visible.iter().map(|e| (*e).into())
                 .max().unwrap_or(OrderIdx::new(0))
         );
+        let image_id;
+        let visible_and_bboxes_clone = visible_and_bboxes.clone();
         let parent_to_remove = view.rgb_path
             .parent().expect("Expected at least one parent.")
             .parent().unwrap_or(Path::new(""));
         {
-            let mut lock = metadata.lock().unwrap();
-            let len = lock.len();  // TODO: Should the ID be global?
+            let mut lock = view_metadata.lock().unwrap();
+            image_id = lock.len();  // TODO: Should the ID be global?
             lock.push(ViewMetadata::new(
                 view.rgb_path.strip_prefix(parent_to_remove).unwrap().to_path_buf(),
-                visible_and_bboxes,
+                visible_and_bboxes_clone,
                 arr.nrows(),
                 arr.ncols(),
-                len,
+                image_id,
             ));
+        }
+        {
+            let mut lock = annotations.lock().unwrap();
+            for (instance_id, bbox) in visible_and_bboxes.drain() {
+                let len = lock.len();
+                lock.push(AnnotationMetadata::new(
+                    len,  // TODO: Should the ID be global?
+                    image_id,
+                    instance_id,
+                    bbox,
+                ));
+            }
         }
     }
 }
