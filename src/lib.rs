@@ -153,7 +153,7 @@ pub fn main(config: Config) {
     assert!(validation_test_boundary.is_normal());
     let validation_test_boundary_u = validation_test_boundary as usize;
 
-    let test_scenes = scenes.split_off(train_validation_boundary_u.checked_add(validation_test_boundary_u).unwrap());
+    let test_scenes = scenes.split_off(validation_test_boundary_u);
     let validation_scenes = scenes.split_off(train_validation_boundary_u);
     let train_scenes = scenes;
 
