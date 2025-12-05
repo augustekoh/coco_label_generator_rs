@@ -229,6 +229,8 @@ pub fn main(config: Config) {
     let train_scenes = scenes;
 
     std::fs::create_dir_all(&config.output_dir_path).unwrap();
+    std::fs::File::create_new(config.output_dir_path.join("config.json")).unwrap()
+        .write(serde_json::to_string_pretty(&config).unwrap().as_bytes()).unwrap();
     generate_json(train_scenes, config.output_dir_path.join("train.json"), &mut rng);
     generate_json(validation_scenes, config.output_dir_path.join("valid.json"), &mut rng);
     generate_json(test_scenes, config.output_dir_path.join("test.json"), &mut rng);
