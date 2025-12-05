@@ -9,6 +9,7 @@ use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
+use serde::Serialize;
 
 
 struct Proportion {
@@ -72,6 +73,7 @@ impl FromStr for TrainValTestSplit {
     }
 }
 
+#[derive(Serialize)]
 pub struct Config {
     pub output_dir_path: PathBuf,
     pub data_input_dir_path: PathBuf,
@@ -117,6 +119,7 @@ impl View {
 }
 
 pub fn main(config: Config) {
+    println!("{}", serde_json::to_string(&config).unwrap());
     let mut scenes = vec![];
     for entry in std::fs::read_dir(&config.data_input_dir_path).unwrap() {
         let entry = entry.unwrap();
