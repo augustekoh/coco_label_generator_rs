@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use std::collections::{HashMap, HashSet};
 
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use ndarray::Array2;
@@ -12,6 +13,34 @@ use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use serde::Serialize;
 
+
+const OBJECT_VIEW_BACKGROUND_VALUE: u8 = 0;
+
+#[derive(Eq, PartialEq, Hash, Clone, Copy)]
+enum InstancesObjectsValue {
+    Background,
+    Object(ObjectViewId),
+}
+impl From<u8> for InstancesObjectsValue {
+    fn from(value: u8) -> Self {
+        if value == OBJECT_VIEW_BACKGROUND_VALUE {
+            Self::Background
+        } else {
+            Self::Object(ObjectViewId(value))
+        }
+    }
+}
+impl From<f32> for InstancesObjectsValue {
+    fn from(value: f32) -> Self {
+        assert!(value.is_normal());
+        let r = value as u8;
+        assert_eq!(r as f32, value);
+        r.into()
+    }
+}
+
+#[derive(Eq, PartialEq, Hash, Clone, Copy)]
+struct ObjectViewId(u8);
 
 #[derive(Serialize)]
 struct Proportion {
@@ -179,21 +208,101 @@ fn generate_json(scenes: Vec<Scene>) {
 }
 
 struct ViewMetadata {
-    temp: f32,
+    visible: HashMap<ObjectViewId, Bboxx1y1x2y2>,
 }
 impl ViewMetadata {
-    fn new(temp: f32) -> Self {
-        Self { temp }
+    fn new(visible: HashMap<ObjectViewId, Bboxx1y1x2y2>) -> Self {
+        Self { visible }
+    }
+}
+
+struct Bboxx1y1x2y2 {
+    x1: usize,
+    x2: usize,
+    y1: usize,
+    y2: usize,
+}
+impl Bboxx1y1x2y2 {
+    fn bulider() -> Bboxx1y1x2y2Builder {
+        Bboxx1y1x2y2Builder::default()
+    }
+}
+#[derive(Default, Debug)]
+struct Bboxx1y1x2y2Builder {
+    x1: Option<usize>,
+    x2: Option<usize>,
+    y1: Option<usize>,
+    y2: Option<usize>,
+}
+impl Bboxx1y1x2y2Builder {
+    pub fn set_x1(mut self, v: usize) -> Self { self.x1 = Some(v); self }
+    pub fn set_x2(mut self, v: usize) -> Self { self.x2 = Some(v); self }
+    pub fn set_y1(mut self, v: usize) -> Self { self.y1 = Some(v); self }
+    pub fn set_y2(mut self, v: usize) -> Self { self.y2 = Some(v); self }
+    pub fn build(self) -> Result<Bboxx1y1x2y2, String> {
+        let x1 = self.x1.expect("x1 is not set.");
+        let x2 = self.x2.expect("x2 is not set.");
+        let y1 = self.y1.expect("y1 is not set.");
+        let y2 = self.y2.expect("y2 is not set.");
+        if x2 < x1 {
+            Err(format!("Invalid: x2 < x1. x1: {}, x2: {}", x1, x2))
+        } else if y2 < y1 {
+            Err(format!("Invalid: y2 < y1. y1: {}, y2: {}", y1, y2))
+        } else {
+            Ok(Bboxx1y1x2y2 { x1, x2, y1, y2 })
+        }
     }
 }
 
 fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) {
     for view in scene.views() {
         let mut npz = NpzReader::new(std::fs::File::open(view.npz_path()).unwrap()).unwrap();
-        let arr: Array2<f32> = npz.by_name("instances_semantic").unwrap();
+        let arr_original: Array2<f32> = npz.by_name("instances_objects").unwrap();
+        let mut visible = HashSet::new();
+        let arr: Array2<InstancesObjectsValue> = arr_original.mapv(|e| {
+            let r = e.into();
+            if let InstancesObjectsValue::Object(obj) = r {
+                visible.insert(obj);
+            }
+            r
+        });
+        let mut visible_and_bboxes = HashMap::new();
+        for id in visible.into_iter() {
+            visible_and_bboxes.insert(id, bounding_box(&arr, &InstancesObjectsValue::Object(id)));
+        }
         {
             let mut lock = metadata.lock().unwrap();
-            lock.push(ViewMetadata::new(arr[[0, 0]]));
+            lock.push(dbg!(ViewMetadata::new(visible_and_bboxes)));
+        }
+    }
+}
+
+fn bounding_box<T: Eq>(arr: &Array2<T>, target: &T) -> Bboxx1y1x2y2 {
+    Bboxx1y1x2y2::bulider()
+        .set_x1(find_single_bbox_coord(&arr, &target, 1, true).expect("col min not found."))
+        .set_x2(find_single_bbox_coord(&arr, &target, 1, false).expect("col max not found."))
+        .set_y1(find_single_bbox_coord(&arr, &target, 0, true).expect("row min not found."))
+        .set_y2(find_single_bbox_coord(&arr, &target, 0, false).expect("row max not found."))
+        .build().expect("Failed to build bbox.")
+}
+
+fn find_single_bbox_coord<T: Eq>(arr: &Array2<T>, target: &T, axis: usize, increasing: bool) -> Result<usize, ()> {
+    let mut slice_iter = arr.axis_iter(ndarray::Axis(axis)).enumerate();
+    loop {
+        let next = if increasing { slice_iter.next() } else { slice_iter.next_back() };
+        let (idx, slice) = if let Some(i) = next {
+            i
+        } else {
+            return Err(());
+        };
+        for v in slice.iter() {
+            if v == target {
+                return if increasing {
+                    Ok(idx)
+                } else {
+                    Ok(idx.checked_add(1).unwrap())  // So that the coordinates are at pixel intersections, not centers.
+                }
+            }
         }
     }
 }
