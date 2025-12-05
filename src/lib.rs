@@ -219,7 +219,7 @@ fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(
         ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}%) \
-                                     [rate: {per_sec:<4} | elapsed: {elapsed} | eta: {eta}]")
+                                     [rate: {per_sec:2} | elapsed: {elapsed} | eta: {eta}]")
             .unwrap()
             .progress_chars("█▉▊▋▌▍▎▏  "));
     bar.enable_steady_tick(std::time::Duration::from_millis(50));
