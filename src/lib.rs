@@ -169,6 +169,7 @@ impl View {
 }
 
 pub fn main(config: Config) {
+    assert!(!config.output_dir_path.exists());
     println!("{}", serde_json::to_string(&config).unwrap());
     let mut scenes = vec![];
     for entry in std::fs::read_dir(&config.data_input_dir_path).unwrap() {
@@ -204,13 +205,14 @@ pub fn main(config: Config) {
     let validation_scenes = scenes.split_off(train_validation_boundary_u);
     let train_scenes = scenes;
 
-    generate_json(train_scenes);
-    generate_json(validation_scenes);
-    generate_json(test_scenes);
+    std::fs::create_dir_all(&config.output_dir_path);
+    generate_json(train_scenes, config.output_dir_path.join("train.json"));
+    generate_json(validation_scenes, config.output_dir_path.join("valid.json"));
+    generate_json(test_scenes, config.output_dir_path.join("test.json"));
 }
 
-fn generate_json(scenes: Vec<Scene>) {
-    let mut output_file = std::fs::File::create_new("out.json").unwrap();
+fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
+    assert!(!out_json_path.exists());
     let views_metadata = Arc::new(Mutex::new(vec![]));
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(
@@ -235,7 +237,8 @@ fn generate_json(scenes: Vec<Scene>) {
         ],
         "annotations": []
     });
-    output_file.write(json_file_content.to_string().as_bytes()).unwrap();
+    let mut output_file = std::fs::File::create_new(out_json_path).unwrap();
+    output_file.write(serde_json::to_string_pretty(&json_file_content).unwrap().as_bytes()).unwrap();
 }
 
 #[derive(Debug, Serialize)]
