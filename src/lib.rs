@@ -20,14 +20,14 @@ const OBJECT_VIEW_BACKGROUND_VALUE: usize = 0;
 #[derive(Eq, PartialEq, Hash, Clone, Copy)]
 enum InstancesObjectsValue {
     Background,
-    Object(ObjectViewId),
+    Object(InstanceId),
 }
 impl From<usize> for InstancesObjectsValue {
     fn from(value: usize) -> Self {
         if value == OBJECT_VIEW_BACKGROUND_VALUE {
             Self::Background
         } else {
-            Self::Object(ObjectViewId::new(value))
+            Self::Object(InstanceId::new(value))
         }
     }
 }
@@ -40,30 +40,26 @@ impl From<f32> for InstancesObjectsValue {
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Ord, PartialOrd)]
-struct OrderIdx { inner: usize }
-impl OrderIdx {
-    pub fn new(idx: usize) -> Self { Self { inner: idx } }
-}
-impl From<ObjectViewId> for OrderIdx {
-    fn from(value: ObjectViewId) -> Self {
-        Self { inner: value.inner.checked_sub(1).unwrap() }
+impl From<InstanceId> for usize {
+    fn from(value: InstanceId) -> Self {
+        value.inner.checked_sub(1).unwrap()
     }
 }
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Serialize, Ord, PartialOrd)]
-struct ObjectViewId { inner: usize }
-impl ObjectViewId {
+#[serde(transparent)]
+struct InstanceId { inner: usize }
+impl InstanceId {
     fn new(v: usize) -> Self { Self { inner: v } }
 }
 
-#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Serialize, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Ord, PartialOrd)]
 struct SceneId { inner: usize }
 impl SceneId {
     fn new(v: usize) -> Self { Self { inner: v } }
 }
 
-#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Serialize, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Ord, PartialOrd)]
 struct ViewId { inner: usize }
 impl ViewId {
     fn new(v: usize) -> Self { Self { inner: v } }
@@ -289,11 +285,11 @@ fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
 struct AnnotationMetadata {
     scene_id: SceneId,
     view_id: ViewId,
-    instance_id: ObjectViewId,
+    instance_id: InstanceId,
     bbox: Bboxx1y1x2y2,
 }
 impl AnnotationMetadata {
-    fn new(scene_id: SceneId, view_id: ViewId, instance_id: ObjectViewId, bbox: Bboxx1y1x2y2) -> Self {
+    fn new(scene_id: SceneId, view_id: ViewId, instance_id: InstanceId, bbox: Bboxx1y1x2y2) -> Self {
         Self { scene_id, view_id, instance_id, bbox }
     }
 }
@@ -301,7 +297,7 @@ impl AnnotationMetadata {
 struct AnnotationMetadataSerde {
     id: usize,
     image_id: usize,
-    instance_id: ObjectViewId,
+    instance_id: InstanceId,
     bbox: Bboxx1y1x2y2,
 }
 impl AnnotationMetadataSerde {
@@ -315,12 +311,12 @@ struct ViewMetadata {
     scene_id: SceneId,
     id: ViewId,
     rgb_relpath: PathBuf,
-    visible: HashMap<ObjectViewId, AnnotationMetadata>,
+    visible: HashMap<InstanceId, AnnotationMetadata>,
     height: usize,
     width: usize,
 }
 impl ViewMetadata {
-    fn new(rgb_relpath: PathBuf, visible: HashMap<ObjectViewId, AnnotationMetadata>, height: usize, width: usize,
+    fn new(rgb_relpath: PathBuf, visible: HashMap<InstanceId, AnnotationMetadata>, height: usize, width: usize,
            id: ViewId, scene_id: SceneId) -> Self {
         Self { rgb_relpath, visible, height, width, id, scene_id }
     }
@@ -413,7 +409,7 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
         }
         check_count_in_csv(
             &view,
-            visible.iter().map(|e| (*e).into()).max().unwrap_or(OrderIdx::new(0))
+            visible.iter().map(|e| (*e).into()).max().unwrap_or(0)
         );
         let visible_map_clone = visible_map.clone();
         let parent_to_remove = view.rgb_path
@@ -433,7 +429,7 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
     }
 }
 
-fn check_count_in_csv(view: &View, expected_low_bound_on_max: OrderIdx) {
+fn check_count_in_csv(view: &View, expected_low_bound_on_max: usize) {
     let mut csv_reader = csv::Reader::from_reader(std::fs::File::open(view.order_v2_csv_path()).unwrap());
     let mut count_records: usize = 0;
     let mut count_cols = None;
@@ -446,7 +442,6 @@ fn check_count_in_csv(view: &View, expected_low_bound_on_max: OrderIdx) {
             assert_eq!(count_cols.unwrap(), cols);
         }
     };
-    let count_records = OrderIdx::new(count_records.try_into().unwrap());
     assert!(expected_low_bound_on_max <= count_records, "{:?} > {:?}", expected_low_bound_on_max, count_records);
 }
 
