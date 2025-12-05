@@ -215,7 +215,7 @@ fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
     assert!(!out_json_path.exists());
     let views_metadata = Arc::new(Mutex::new(vec![]));
     let annotations_metadata = Arc::new(Mutex::new(vec![]));
-    let bar = ProgressBar::new((scenes.len() * 2).try_into().unwrap());
+    let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(
         ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}%) \
                                      [rate: {per_sec:<4} | elapsed: {elapsed} | eta: {eta}]")
@@ -225,8 +225,8 @@ fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
     rayon::ThreadPoolBuilder::new().build().unwrap().install(|| {
         scenes
             .par_iter().panic_fuse()
-            .progress_with(bar)
             .map(|s| derive_view_metadata(s, Arc::clone(&views_metadata), Arc::clone(&annotations_metadata)))
+            .progress_with(bar)
             .for_each(drop);
     });
     let json_file_content = serde_json::json!({
