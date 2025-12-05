@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 clap = "4.5.53"
 ndarray = "0.16.1"
-ndarray-npy = { version = "0.9.1", features = ["compressed_npz"] }
+ndarray-npy = { version = "0.9.1", features = ["compressed_npz", "npz"] }
 ordered-float = "5.1.0"
 rand = "0.9.2"
 rand_pcg = "0.9.0"
