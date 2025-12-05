@@ -166,7 +166,7 @@ fn generate_json(scenes: Vec<Scene>) {
     let metadata = Arc::new(Mutex::new(vec![]));
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(ProgressStyle::with_template(
-        "{spinner} {wide_bar} ({percent}) [{per_sec} {elapsed}:{eta}]").unwrap());
+        "{spinner} {wide_bar} ({percent}) [{per_sec:2} {elapsed}:{eta}]").unwrap());
     bar.enable_steady_tick(std::time::Duration::from_millis(50));
     scenes
         .par_iter().panic_fuse()
