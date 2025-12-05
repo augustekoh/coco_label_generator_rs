@@ -15,44 +15,59 @@ use rayon::iter::ParallelIterator;
 use serde::Serialize;
 
 
-const OBJECT_VIEW_BACKGROUND_VALUE: u32 = 0;
+const OBJECT_VIEW_BACKGROUND_VALUE: usize = 0;
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy)]
 enum InstancesObjectsValue {
     Background,
     Object(ObjectViewId),
 }
-impl From<u32> for InstancesObjectsValue {
-    fn from(value: u32) -> Self {
+impl From<usize> for InstancesObjectsValue {
+    fn from(value: usize) -> Self {
         if value == OBJECT_VIEW_BACKGROUND_VALUE {
             Self::Background
         } else {
-            Self::Object(ObjectViewId(value))
+            Self::Object(ObjectViewId::new(value))
         }
     }
 }
 impl From<f32> for InstancesObjectsValue {
     fn from(value: f32) -> Self {
         assert!(value.is_normal() || value == 0.0);
-        let r = value as u32;
+        let r = value as usize;
         assert_eq!(r as f32, value);
         r.into()
     }
 }
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Ord, PartialOrd)]
-struct OrderIdx(u32);
+struct OrderIdx { inner: usize }
 impl OrderIdx {
-    pub fn new(idx: u32) -> Self { Self(idx) }
+    pub fn new(idx: usize) -> Self { Self { inner: idx } }
 }
 impl From<ObjectViewId> for OrderIdx {
     fn from(value: ObjectViewId) -> Self {
-        Self(value.0.checked_sub(1).unwrap())
+        Self { inner: value.inner.checked_sub(1).unwrap() }
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Serialize)]
-struct ObjectViewId(u32);
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Serialize, Ord, PartialOrd)]
+struct ObjectViewId { inner: usize }
+impl ObjectViewId {
+    fn new(v: usize) -> Self { Self { inner: v } }
+}
+
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Serialize, Ord, PartialOrd)]
+struct SceneId { inner: usize }
+impl SceneId {
+    fn new(v: usize) -> Self { Self { inner: v } }
+}
+
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Serialize, Ord, PartialOrd)]
+struct ViewId { inner: usize }
+impl ViewId {
+    fn new(v: usize) -> Self { Self { inner: v } }
+}
 
 #[derive(Serialize, Debug)]
 #[serde(transparent)]
@@ -127,6 +142,7 @@ pub struct Config {
 }
 
 struct Scene {
+    id: SceneId,
     views: Vec<View>,
     path: PathBuf,
 }
@@ -142,13 +158,18 @@ impl Scene {
             })
             .map(|e| View::new(e.unwrap().path()))
             .collect();
-        Self { views, path }
+        let re = regex::Regex::new(r"scene([0-9]+)").unwrap();
+        let cap = re.captures(path.file_name().unwrap().to_str().unwrap()).unwrap();
+        assert_eq!(cap.len(), 1);
+        let id = SceneId::new(cap[0].parse().unwrap());
+        Self { views, path, id }
     }
     pub fn views(&self) -> &Vec<View> {
         &self.views
     }
 }
 struct View {
+    id: ViewId,
     rgb_path: PathBuf,
     npz_path: PathBuf,
     /// One entry per object, regardless of whether the object is visible.
@@ -159,7 +180,11 @@ impl View {
         let id = rgb_path.file_name().unwrap().to_str().unwrap().split("_").next().unwrap();
         let npz_path = rgb_path.parent().unwrap().join(format!("{}.npz", id));
         let order_v2_csv_path = rgb_path.parent().unwrap().join(format!("{}_order_v2.csv", id));
-        Self { rgb_path, npz_path, order_v2_csv_path }
+        let re = regex::Regex::new(r"([0-9]+)_rgb\.png").unwrap();
+        let cap = re.captures(rgb_path.file_name().unwrap().to_str().unwrap()).unwrap();
+        assert_eq!(cap.len(), 1);
+        let id = ViewId::new(cap[0].parse().unwrap());
+        Self { id, rgb_path, npz_path, order_v2_csv_path }
     }
     pub fn npz_path(&self) -> &Path {
         self.npz_path.as_path()
@@ -215,7 +240,6 @@ pub fn main(config: Config) {
 fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
     assert!(!out_json_path.exists());
     let views_metadata = Arc::new(Mutex::new(vec![]));
-    let annotations_metadata = Arc::new(Mutex::new(vec![]));
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(
         ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}%) \
@@ -226,51 +250,91 @@ fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
     rayon::ThreadPoolBuilder::new().build().unwrap().install(|| {
         scenes
             .par_iter().panic_fuse()
-            .map(|s| derive_view_metadata(s, Arc::clone(&views_metadata), Arc::clone(&annotations_metadata)))
+            .map(|s| derive_view_metadata(s, Arc::clone(&views_metadata)))
             .progress_with(bar)
             .for_each(drop);
     });
+    let mut annotations_metadata_serde = vec![];
+    let mut views_metadata_serde = vec![];
+    let mut views_list = views_metadata.lock().unwrap();
+    views_list.sort_by_key(|a| (a.scene_id, a.id));
+    for (view_idx, view) in views_list.drain(..).enumerate() {
+        if view_idx == usize::MAX { panic!(); }
+        let mut obj_list: Vec<AnnotationMetadata> = view.visible.iter().map(|(_, v)| v.clone()).collect();
+        obj_list.sort_by_key(|a| (a.scene_id, a.view_id, a.instance_id));
+        for ann in obj_list {
+            annotations_metadata_serde.push(AnnotationMetadataSerde::from_ann(
+                ann,
+                annotations_metadata_serde.len(),
+                view_idx,
+            ));
+        }
+        views_metadata_serde.push(ViewMetadataSerde::from_view(view, view_idx.checked_add(1).unwrap()));
+    }
     let json_file_content = serde_json::json!({
         "info": {},
         "licenses": [],
-        "images": *views_metadata.lock().unwrap(),
+        "images": views_metadata_serde,
         "categories": [
             {"supercategory": "background", "id": 0, "name": "background"},
             {"supercategory": "foreground", "id": 1, "name": "foreground"}
         ],
-        "annotations": *annotations_metadata.lock().unwrap()
+        "annotations": annotations_metadata_serde
     });
     let mut output_file = std::fs::File::create_new(out_json_path).unwrap();
     output_file.write(serde_json::to_string_pretty(&json_file_content).unwrap().as_bytes()).unwrap();
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug)]
 struct AnnotationMetadata {
+    scene_id: SceneId,
+    view_id: ViewId,
+    instance_id: ObjectViewId,
+    bbox: Bboxx1y1x2y2,
+}
+impl AnnotationMetadata {
+    fn new(scene_id: SceneId, view_id: ViewId, instance_id: ObjectViewId, bbox: Bboxx1y1x2y2) -> Self {
+        Self { scene_id, view_id, instance_id, bbox }
+    }
+}
+#[derive(Debug, Serialize)]
+struct AnnotationMetadataSerde {
     id: usize,
     image_id: usize,
     instance_id: ObjectViewId,
     bbox: Bboxx1y1x2y2,
 }
-impl AnnotationMetadata {
-    fn new(id: usize, image_id: usize, instance_id: ObjectViewId, bbox: Bboxx1y1x2y2) -> Self {
-        Self { id, image_id, instance_id, bbox }
+impl AnnotationMetadataSerde {
+    fn from_ann(value: AnnotationMetadata, id: usize, image_id: usize) -> Self {
+        Self { id, image_id, instance_id: value.instance_id, bbox: value.bbox }
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 struct ViewMetadata {
-    #[serde(rename = "file_name")]
+    scene_id: SceneId,
+    id: ViewId,
     rgb_relpath: PathBuf,
-    #[serde(skip)]
-    visible: HashMap<ObjectViewId, Bboxx1y1x2y2>,
+    visible: HashMap<ObjectViewId, AnnotationMetadata>,
     height: usize,
     width: usize,
-    id: usize,
 }
 impl ViewMetadata {
-    fn new(rgb_relpath: PathBuf, visible: HashMap<ObjectViewId, Bboxx1y1x2y2>, height: usize, width: usize,
-           id: usize) -> Self {
-        Self { rgb_relpath, visible, height, width, id }
+    fn new(rgb_relpath: PathBuf, visible: HashMap<ObjectViewId, AnnotationMetadata>, height: usize, width: usize,
+           id: ViewId, scene_id: SceneId) -> Self {
+        Self { rgb_relpath, visible, height, width, id, scene_id }
+    }
+}
+#[derive(Debug, Serialize)]
+struct ViewMetadataSerde {
+    id: usize,
+    file_name: PathBuf,
+    height: usize,
+    width: usize,
+}
+impl ViewMetadataSerde {
+    fn from_view(value: ViewMetadata, id: usize) -> Self {
+        Self { id, file_name: value.rgb_relpath, height: value.height, width: value.width }
     }
 }
 
@@ -329,8 +393,7 @@ impl Bboxx1y1x2y2Builder {
     }
 }
 
-fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata>>>,
-                        annotations: Arc<Mutex<Vec<AnnotationMetadata>>>) {
+fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata>>>) {
     for view in scene.views() {
         let mut npz = NpzReader::new(std::fs::File::open(view.npz_path()).unwrap()).unwrap();
         let arr_original: Array2<f32> = npz.by_name("instances_objects").unwrap();
@@ -342,43 +405,31 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
             }
             r
         });
-        let mut visible_and_bboxes = HashMap::new();
+        let mut visible_map = HashMap::new();
         for id in visible.iter() {
             let bbox = bounding_box(&arr, &InstancesObjectsValue::Object(*id));
-            visible_and_bboxes.insert(*id, bbox);
+            let ann = AnnotationMetadata::new(scene.id, view.id, *id, bbox);
+            visible_map.insert(*id, ann);
         }
         check_count_in_csv(
             &view,
             visible.iter().map(|e| (*e).into())
                 .max().unwrap_or(OrderIdx::new(0))
         );
-        let image_id;
-        let visible_and_bboxes_clone = visible_and_bboxes.clone();
+        let visible_map_clone = visible_map.clone();
         let parent_to_remove = view.rgb_path
             .parent().expect("Expected at least one parent.")
             .parent().unwrap_or(Path::new(""));
         {
             let mut lock = view_metadata.lock().unwrap();
-            image_id = lock.len();  // TODO: Should the ID be global?
             lock.push(ViewMetadata::new(
                 view.rgb_path.strip_prefix(parent_to_remove).unwrap().to_path_buf(),
-                visible_and_bboxes_clone,
+                visible_map_clone,
                 arr.nrows(),
                 arr.ncols(),
-                image_id,
+                view.id,
+                scene.id,
             ));
-        }
-        {
-            let mut lock = annotations.lock().unwrap();
-            for (instance_id, bbox) in visible_and_bboxes.drain() {
-                let len = lock.len();
-                lock.push(AnnotationMetadata::new(
-                    len,  // TODO: Should the ID be global?
-                    image_id,
-                    instance_id,
-                    bbox,
-                ));
-            }
         }
     }
 }
@@ -418,6 +469,7 @@ fn find_single_bbox_coord<T: Eq>(arr: &Array2<T>, target: &T, axis: usize, incre
         } else {
             return Err(());
         };
+        if idx == usize::MAX { panic!(); }
         for v in slice.iter() {
             if v == target {
                 return Ok(if increasing {
