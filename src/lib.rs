@@ -218,7 +218,7 @@ fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(
         ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}%) \
-                                     [rate: {per_sec:<3!} | elapsed: {elapsed} | eta: {eta}]")
+                                     [rate: {per_sec:<4} | elapsed: {elapsed} | eta: {eta}]")
             .unwrap()
             .progress_chars("█▉▊▋▌▍▎▏  "));
     bar.enable_steady_tick(std::time::Duration::from_millis(50));
@@ -274,7 +274,7 @@ impl ViewMetadata {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(from = "Bboxx1y1x2y2Serde")]
+#[serde(into = "Bboxx1y1x2y2Serde")]
 struct Bboxx1y1x2y2 {
     x1: usize,
     x2: usize,
@@ -287,9 +287,19 @@ impl Bboxx1y1x2y2 {
     }
 }
 #[derive(Debug, Serialize)]
-struct Bboxx1y1x2y2Serde(usize, usize, usize, usize);
+struct Bboxx1y1x2y2Serde(f64, f64, f64, f64);
 impl From<Bboxx1y1x2y2> for Bboxx1y1x2y2Serde {
-    fn from(value: Bboxx1y1x2y2) -> Self { Self(value.x1, value.x2, value.y1, value.y2) }
+    fn from(value: Bboxx1y1x2y2) -> Self {
+        let x1 = value.x1 as f64;
+        assert_eq!(x1 as usize, value.x1);
+        let x2 = value.x2 as f64;
+        assert_eq!(x2 as usize, value.x2);
+        let y1 = value.y1 as f64;
+        assert_eq!(y1 as usize, value.y1);
+        let y2 = value.y2 as f64;
+        assert_eq!(y2 as usize, value.y2);
+        Self(x1, x2, y1, y2)
+    }
 }
 #[derive(Default, Debug)]
 struct Bboxx1y1x2y2Builder {
