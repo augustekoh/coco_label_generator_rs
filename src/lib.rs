@@ -13,6 +13,7 @@ use rayon::iter::ParallelIterator;
 use serde::Serialize;
 
 
+#[derive(Serialize)]
 struct Proportion {
     inner: f64,
 }
@@ -36,6 +37,7 @@ impl FromStr for Proportion {
     }
 }
 
+#[derive(Serialize)]
 pub struct TrainValTestSplit {
     train: Proportion,
     validation: Proportion,
