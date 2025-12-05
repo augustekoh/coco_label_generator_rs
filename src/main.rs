@@ -18,8 +18,12 @@ pub fn get_full_crate_version() -> String {
 fn main() {
     let mut matches = Command::new("coco_label_generator_rs")
         .version(get_full_crate_version())
-        .arg(Arg::new(TRAIN_VAL_TEST_SPLIT_ARGNAME).value_parser(clap::value_parser!(String)))
-        .arg(Arg::new(SEED_ARGNAME).value_parser(clap::value_parser!(u64)))
+        .arg(Arg::new(TRAIN_VAL_TEST_SPLIT_ARGNAME)
+             .value_parser(clap::value_parser!(String))
+             .help("E.g., 7:1:2 for 70% training, 10% validation, and 20% testing. No requirement on total sum."))
+        .arg(Arg::new(SEED_ARGNAME)
+             .value_parser(clap::value_parser!(u64))
+             .help("Seed for random shuffling. The shuffling algorithm used is intended to be portable."))
         .arg(Arg::new(DATA_INPUT_DIR_PATH_ARGNAME).value_parser(clap::value_parser!(PathBuf)))
         .arg(Arg::new(OUTPUT_DIR_PATH_ARGNAME).value_parser(clap::value_parser!(PathBuf)))
         .get_matches();
