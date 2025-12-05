@@ -157,9 +157,9 @@ pub fn main(config: Config) {
     let validation_scenes = scenes.split_off(train_validation_boundary);
     let train_scenes = scenes;
 
-    generate_json(test_scenes);
-    generate_json(validation_scenes);
     generate_json(train_scenes);
+    generate_json(validation_scenes);
+    generate_json(test_scenes);
 }
 
 fn generate_json(scenes: Vec<Scene>) {
