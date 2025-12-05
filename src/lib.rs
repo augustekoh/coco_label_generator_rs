@@ -168,7 +168,7 @@ fn generate_json(scenes: Vec<Scene>) {
     bar.set_style(
         ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}) [{per_sec:1} {elapsed}/{eta}]")
             .unwrap()
-            .progress_chars("█▇▆▅▄▃▂▁  "));
+            .progress_chars("█▉▊▋▌▍▎▏--"));
     bar.enable_steady_tick(std::time::Duration::from_millis(50));
     rayon::ThreadPoolBuilder::new().num_threads(48).build().unwrap().install(|| {
         scenes
