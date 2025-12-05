@@ -215,7 +215,7 @@ fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
     assert!(!out_json_path.exists());
     let views_metadata = Arc::new(Mutex::new(vec![]));
     let annotations_metadata = Arc::new(Mutex::new(vec![]));
-    let bar = ProgressBar::new(scenes.len().try_into().unwrap() * 2);
+    let bar = ProgressBar::new((scenes.len() * 2).try_into().unwrap());
     bar.set_style(
         ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}%) \
                                      [rate: {per_sec:<4} | elapsed: {elapsed} | eta: {eta}]")
