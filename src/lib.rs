@@ -166,7 +166,7 @@ fn generate_json(scenes: Vec<Scene>) {
     let metadata = Arc::new(Mutex::new(vec![]));
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(ProgressStyle::with_template(
-        "{spinner} {wide_bar} ({percent}) [{per_sec:1} {elapsed}:{eta}]").unwrap());
+        "{spinner} {wide_bar} ({percent}) [{per_sec:1} {elapsed}/{eta}]").unwrap());
     bar.enable_steady_tick(std::time::Duration::from_millis(50));
     rayon::ThreadPoolBuilder::new().num_threads(48).build().unwrap().install(|| {
         scenes
