@@ -147,14 +147,14 @@ pub fn main(config: Config) {
     assert!(scenes_count_f.is_normal());
     let train_validation_boundary = scenes_count_f * config.split.train_proportion();
     assert!(train_validation_boundary.is_normal());
-    let train_validation_boundary = train_validation_boundary as usize;
+    let train_validation_boundary_u = train_validation_boundary as usize;
 
-    let validation_test_boundary = scenes_count_f * config.split.validation_proportion();
+    let validation_test_boundary = scenes_count_f * config.split.validation_proportion() + train_validation_boundary;
     assert!(validation_test_boundary.is_normal());
-    let validation_test_boundary = validation_test_boundary as usize;
+    let validation_test_boundary_u = validation_test_boundary as usize;
 
-    let test_scenes = scenes.split_off(validation_test_boundary);
-    let validation_scenes = scenes.split_off(train_validation_boundary);
+    let test_scenes = scenes.split_off(train_validation_boundary_u.checked_add(validation_test_boundary_u).unwrap());
+    let validation_scenes = scenes.split_off(train_validation_boundary_u);
     let train_scenes = scenes;
 
     generate_json(train_scenes);
