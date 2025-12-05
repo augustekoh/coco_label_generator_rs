@@ -39,10 +39,10 @@ impl From<f32> for InstancesObjectsValue {
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Clone, Copy)]
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
 struct ObjectViewId(u8);
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct Proportion {
     inner: f64,
 }
@@ -207,6 +207,7 @@ fn generate_json(scenes: Vec<Scene>) {
     });
 }
 
+#[derive(Debug)]
 struct ViewMetadata {
     visible: HashMap<ObjectViewId, Bboxx1y1x2y2>,
 }
@@ -216,6 +217,7 @@ impl ViewMetadata {
     }
 }
 
+#[derive(Debug)]
 struct Bboxx1y1x2y2 {
     x1: usize,
     x2: usize,
