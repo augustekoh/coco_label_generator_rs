@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
+use indicatif::ParallelProgressIterator;
 use ndarray::Array2;
 use ndarray_npy::NpzReader;
 use rand::seq::SliceRandom;
@@ -161,7 +162,10 @@ pub fn main(config: Config) {
 
 fn generate_json(scenes: Vec<Scene>) {
     let metadata = Arc::new(Mutex::new(vec![]));
-    scenes.par_iter().panic_fuse().map(|s| derive_view_metadata(s, Arc::clone(&metadata))).for_each(drop);
+    scenes
+        .par_iter().panic_fuse()
+        .progress_count(scenes.len().try_into().unwrap())
+        .map(|s| derive_view_metadata(s, Arc::clone(&metadata))).for_each(drop);
 }
 
 struct ViewMetadata {
@@ -180,7 +184,6 @@ fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) 
         {
             let mut lock = metadata.lock().unwrap();
             lock.push(ViewMetadata::new(arr[[0, 0]]));
-            print!("\r{}", lock.len());
         }
     }
 }
