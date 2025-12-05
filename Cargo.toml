@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 clap = "4.5.53"
+csv = "1.4.0"
 indicatif = { version = "0.18.3", features = ["rayon"] }
 ndarray = "0.16.1"
 ndarray-npy = { version = "0.9.1", features = ["compressed_npz", "npz"] }

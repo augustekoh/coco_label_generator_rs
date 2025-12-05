@@ -138,15 +138,20 @@ impl Scene {
 struct View {
     rgb_path: PathBuf,
     npz_path: PathBuf,
+    order_v2_csv_path: PathBuf,
 }
 impl View {
     pub fn new(rgb_path: PathBuf) -> Self {
         let id = rgb_path.file_name().unwrap().to_str().unwrap().split("_").next().unwrap();
         let npz_path = rgb_path.parent().unwrap().join(format!("{}.npz", id));
-        Self { rgb_path, npz_path }
+        let order_v2_csv_path = rgb_path.parent().unwrap().join(format!("{}_order_v2.csv", id));
+        Self { rgb_path, npz_path, order_v2_csv_path }
     }
     pub fn npz_path(&self) -> &Path {
         self.npz_path.as_path()
+    }
+    pub fn order_v2_csv_path(&self) -> &Path {
+        self.order_v2_csv_path.as_path()
     }
 }
 
@@ -192,7 +197,7 @@ pub fn main(config: Config) {
 }
 
 fn generate_json(scenes: Vec<Scene>) {
-    let metadata = Arc::new(Mutex::new(vec![]));
+    let views_metadata = Arc::new(Mutex::new(vec![]));
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(
         ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}) [{per_sec:1} {elapsed}/{eta}]")
@@ -203,17 +208,24 @@ fn generate_json(scenes: Vec<Scene>) {
         scenes
             .par_iter().panic_fuse()
             .progress_with(bar)
-            .map(|s| derive_view_metadata(s, Arc::clone(&metadata))).for_each(drop);
+            .map(|s| derive_view_metadata(s, Arc::clone(&views_metadata))).for_each(drop);
     });
 }
 
 #[derive(Debug)]
 struct ViewMetadata {
+    rgb_relpath: PathBuf,
     visible: HashMap<ObjectViewId, Bboxx1y1x2y2>,
+    height: usize,
+    width: usize,
+    id: usize,
 }
 impl ViewMetadata {
-    fn new(visible: HashMap<ObjectViewId, Bboxx1y1x2y2>) -> Self {
-        Self { visible }
+    fn new(rgb_relpath: PathBuf, visible: HashMap<ObjectViewId, Bboxx1y1x2y2>, height: usize, width: usize,
+           id: usize) ->
+        Self
+    {
+        Self { rgb_relpath, visible, height, width, id }
     }
 }
 
@@ -272,11 +284,34 @@ fn derive_view_metadata(scene: &Scene, metadata: Arc<Mutex<Vec<ViewMetadata>>>) 
         for id in visible.into_iter() {
             visible_and_bboxes.insert(id, bounding_box(&arr, &InstancesObjectsValue::Object(id)));
         }
+        assert!(check_count_in_csv(&view, visible_and_bboxes.len()));
+        let parent_to_remove = view.rgb_path
+            .parent().expect("Expected at least one parent.")
+            .parent().unwrap_or(Path::new(""));
         {
             let mut lock = metadata.lock().unwrap();
-            lock.push(dbg!(ViewMetadata::new(visible_and_bboxes)));
+            let len = lock.len();  // TODO: Should the ID be global?
+            lock.push(ViewMetadata::new(
+                view.rgb_path.strip_prefix(parent_to_remove).unwrap().to_path_buf(),
+                visible_and_bboxes,
+                arr.nrows(),
+                arr.ncols(),
+                len,
+            ));
         }
     }
+}
+
+fn check_count_in_csv(view: &View, expected_count: usize) -> bool {
+    let mut csv_reader = csv::Reader::from_reader(std::fs::File::open(view.order_v2_csv_path()).unwrap());
+    let mut count_records: usize = 0;
+    for rec in csv_reader.records() {
+        count_records = count_records.checked_add(1).unwrap();
+        if rec.unwrap().len() != expected_count {
+            return false;
+        }
+    };
+    return count_records == expected_count;
 }
 
 fn bounding_box<T: Eq>(arr: &Array2<T>, target: &T) -> Bboxx1y1x2y2 {
