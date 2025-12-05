@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
+use std::io::Write;
 
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use ndarray::Array2;
@@ -50,7 +51,7 @@ impl From<ObjectViewId> for OrderIdx {
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Serialize)]
 struct ObjectViewId(u32);
 
 #[derive(Serialize, Debug)]
@@ -209,6 +210,7 @@ pub fn main(config: Config) {
 }
 
 fn generate_json(scenes: Vec<Scene>) {
+    let mut output_file = std::fs::File::create_new("out.json").unwrap();
     let views_metadata = Arc::new(Mutex::new(vec![]));
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(
@@ -223,11 +225,32 @@ fn generate_json(scenes: Vec<Scene>) {
             .progress_with(bar)
             .map(|s| derive_view_metadata(s, Arc::clone(&views_metadata))).for_each(drop);
     });
+    let json_file_content = serde_json::json!({
+        "info": {},
+        "licenses": [],
+        "images": *views_metadata.lock().unwrap(),
+        "categories": [
+            {"supercategory": "background", "id": 0, "name": "background"},
+            {"supercategory": "foreground", "id": 1, "name": "foreground"}
+        ],
+        "annotations": []
+    });
+    output_file.write(json_file_content.to_string().as_bytes()).unwrap();
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
+struct AnnotationMetadata {
+    id: usize,
+    image_id: usize,
+    instance_id: ObjectViewId,
+    bbox: Bboxx1y1x2y2,
+}
+
+#[derive(Debug, Serialize)]
 struct ViewMetadata {
+    #[serde(rename = "file_name")]
     rgb_relpath: PathBuf,
+    #[serde(skip)]
     visible: HashMap<ObjectViewId, Bboxx1y1x2y2>,
     height: usize,
     width: usize,
@@ -235,14 +258,13 @@ struct ViewMetadata {
 }
 impl ViewMetadata {
     fn new(rgb_relpath: PathBuf, visible: HashMap<ObjectViewId, Bboxx1y1x2y2>, height: usize, width: usize,
-           id: usize) ->
-        Self
-    {
+           id: usize) -> Self {
         Self { rgb_relpath, visible, height, width, id }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(from = "Bboxx1y1x2y2Serde")]
 struct Bboxx1y1x2y2 {
     x1: usize,
     x2: usize,
@@ -253,6 +275,11 @@ impl Bboxx1y1x2y2 {
     fn bulider() -> Bboxx1y1x2y2Builder {
         Bboxx1y1x2y2Builder::default()
     }
+}
+#[derive(Debug, Serialize)]
+struct Bboxx1y1x2y2Serde(usize, usize, usize, usize);
+impl From<Bboxx1y1x2y2> for Bboxx1y1x2y2Serde {
+    fn from(value: Bboxx1y1x2y2) -> Self { Self(value.x1, value.x2, value.y1, value.y2) }
 }
 #[derive(Default, Debug)]
 struct Bboxx1y1x2y2Builder {
@@ -356,11 +383,11 @@ fn find_single_bbox_coord<T: Eq>(arr: &Array2<T>, target: &T, axis: usize, incre
         };
         for v in slice.iter() {
             if v == target {
-                return if increasing {
-                    Ok(idx)
+                return Ok(if increasing {
+                    idx
                 } else {
-                    Ok(idx.checked_add(1).unwrap())  // So that the coordinates are at pixel intersections, not centers.
-                }
+                    idx.checked_add(1).unwrap()  // So that the coordinates are at pixel intersections, not centers.
+                })
             }
         }
     }
