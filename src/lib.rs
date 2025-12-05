@@ -460,23 +460,25 @@ fn bounding_box<T: Eq>(arr: &Array2<T>, target: &T) -> Bboxx1y1x2y2 {
 }
 
 fn find_single_bbox_coord<T: Eq>(arr: &Array2<T>, target: &T, axis: usize, increasing: bool) -> Result<usize, ()> {
-    let mut slice_iter = arr.axis_iter(ndarray::Axis(axis)).enumerate();
+    let axis = ndarray::Axis(axis);
+    let mut slice_iter = arr.axis_iter(axis);
+    let mut idx: usize = if increasing {
+        0
+    } else {
+        // Intentionally starting at len so that the coords are at pixel intersections, not centers.
+        slice_iter.len()
+    };
     loop {
-        let next = if increasing { slice_iter.next() } else { slice_iter.next_back() };
-        let (idx, slice) = if let Some(i) = next {
-            i
-        } else {
-            return Err(());
-        };
-        if idx == usize::MAX { panic!(); }
-        for v in slice.iter() {
+        let slice = if increasing { slice_iter.next() } else { slice_iter.next_back() };
+        for v in slice.ok_or(())?.iter() {
             if v == target {
-                return Ok(if increasing {
-                    idx
-                } else {
-                    idx.checked_add(1).unwrap()  // So that the coordinates are at pixel intersections, not centers.
-                })
+                return Ok(idx);
             }
         }
+        idx = if increasing {
+            idx.checked_add(1)
+        } else {
+            idx.checked_sub(1)
+        }.unwrap();
     }
 }
