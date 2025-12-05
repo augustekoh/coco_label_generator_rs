@@ -215,14 +215,14 @@ fn generate_json(scenes: Vec<Scene>, out_json_path: PathBuf) {
     assert!(!out_json_path.exists());
     let views_metadata = Arc::new(Mutex::new(vec![]));
     let annotations_metadata = Arc::new(Mutex::new(vec![]));
-    let bar = ProgressBar::new(scenes.len().try_into().unwrap());
+    let bar = ProgressBar::new(scenes.len().try_into().unwrap() * 2);
     bar.set_style(
         ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}%) \
                                      [rate: {per_sec:<4} | elapsed: {elapsed} | eta: {eta}]")
             .unwrap()
             .progress_chars("█▉▊▋▌▍▎▏  "));
     bar.enable_steady_tick(std::time::Duration::from_millis(50));
-    rayon::ThreadPoolBuilder::new().num_threads(48).build().unwrap().install(|| {
+    rayon::ThreadPoolBuilder::new().build().unwrap().install(|| {
         scenes
             .par_iter().panic_fuse()
             .progress_with(bar)
