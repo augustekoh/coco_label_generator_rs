@@ -413,8 +413,7 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
         }
         check_count_in_csv(
             &view,
-            visible.iter().map(|e| (*e).into())
-                .max().unwrap_or(OrderIdx::new(0))
+            visible.iter().map(|e| (*e).into()).max().unwrap_or(OrderIdx::new(0))
         );
         let visible_map_clone = visible_map.clone();
         let parent_to_remove = view.rgb_path
