@@ -65,6 +65,12 @@ impl ViewId {
     fn new(v: usize) -> Self { Self { inner: v } }
 }
 
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Ord, PartialOrd, Serialize)]
+#[serde(transparent)]
+struct CategoryId { inner: usize }
+const BACKGROUND_CATEGORY_ID: CategoryId = CategoryId { inner: 0 };
+const FOREGROUND_CATEGORY_ID: CategoryId = CategoryId { inner: 1 };
+
 #[derive(Serialize, Debug)]
 #[serde(transparent)]
 struct Proportion {
@@ -242,7 +248,7 @@ fn generate_json<T: rand::Rng>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: 
     let bar = ProgressBar::new(scenes.len().try_into().unwrap());
     bar.set_style(
         ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}%) \
-                                     [rate: {per_sec:2} | elapsed: {elapsed} | eta: {eta}]")
+                                     [rate: {per_sec:2} | elapsed: {elapsed} | ETA: {eta}]")
             .unwrap()
             .progress_chars("█▉▊▋▌▍▎▏  "));
     bar.enable_steady_tick(std::time::Duration::from_millis(50));
@@ -277,8 +283,8 @@ fn generate_json<T: rand::Rng>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: 
         "licenses": [],
         "images": views_metadata_serde,
         "categories": [
-            {"supercategory": "background", "id": 0, "name": "background"},
-            {"supercategory": "foreground", "id": 1, "name": "foreground"}
+            {"supercategory": "background", "id": BACKGROUND_CATEGORY_ID, "name": "background"},
+            {"supercategory": "foreground", "id": FOREGROUND_CATEGORY_ID, "name": "foreground"}
         ],
         "annotations": annotations_metadata_serde
     });
@@ -319,11 +325,34 @@ struct ViewMetadata {
     visible: HashMap<InstanceId, AnnotationMetadata>,
     height: usize,
     width: usize,
+    category_id: CategoryId,
 }
 impl ViewMetadata {
-    fn new(rgb_relpath: PathBuf, visible: HashMap<InstanceId, AnnotationMetadata>, height: usize, width: usize,
-           id: ViewId, scene_id: SceneId) -> Self {
-        Self { rgb_relpath, visible, height, width, id, scene_id }
+    pub fn builder() -> ViewMetadataBuilder {
+        ViewMetadataBuilder::default()
+    }
+}
+#[derive(Debug, Default)]
+struct ViewMetadataBuilder {
+    pub scene_id: Option<SceneId>,
+    pub id: Option<ViewId>,
+    pub rgb_relpath: Option<PathBuf>,
+    pub visible: Option<HashMap<InstanceId, AnnotationMetadata>>,
+    pub height: Option<usize>,
+    pub width: Option<usize>,
+    pub category_id: Option<CategoryId>,
+}
+impl ViewMetadataBuilder {
+    pub fn build(self) -> ViewMetadata {
+        ViewMetadata {
+            scene_id: self.scene_id.expect("scene_id is not set."),
+            id: self.id.expect("id is not set."),
+            rgb_relpath: self.rgb_relpath.expect("rgb_relpath is not set."),
+            visible: self.visible.expect("visible is not set."),
+            height: self.height.expect("height is not set."),
+            width: self.width.expect("width is not set."),
+            category_id: self.category_id.expect("category_id is not set."),
+        }
     }
 }
 #[derive(Debug, Serialize)]
@@ -416,21 +445,18 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
             &view,
             visible.iter().map(|e| (*e).into()).max().unwrap_or(0)
         );
-        let visible_map_clone = visible_map.clone();
         let parent_to_remove = view.rgb_path
             .parent().expect("Expected at least one parent.")
             .parent().unwrap_or(Path::new(""));
-        {
-            let mut lock = view_metadata.lock().unwrap();
-            lock.push(ViewMetadata::new(
-                view.rgb_path.strip_prefix(parent_to_remove).unwrap().to_path_buf(),
-                visible_map_clone,
-                arr.nrows(),
-                arr.ncols(),
-                view.id,
-                scene.id,
-            ));
-        }
+        let mut view_builder = ViewMetadata::builder();
+        view_builder.rgb_relpath.replace(view.rgb_path.strip_prefix(parent_to_remove).unwrap().to_path_buf());
+        view_builder.visible.replace(visible_map);
+        view_builder.height.replace(arr.nrows());
+        view_builder.width.replace(arr.ncols());
+        view_builder.scene_id.replace(scene.id);
+        view_builder.id.replace(view.id);
+        view_builder.category_id.replace(FOREGROUND_CATEGORY_ID);
+        view_metadata.lock().unwrap().push(view_builder.build());
     }
 }
 
