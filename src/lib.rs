@@ -539,8 +539,7 @@ fn find_single_bbox_coord<T: Eq>(arr: &Array2<T>, target: &T, axis: usize, incre
     let mut idx: usize = if increasing {
         0
     } else {
-        // Intentionally starting at len so that the coords are at pixel intersections, not centers.
-        slice_iter.len()
+        slice_iter.len()  // Intentionally starting at len so that the coords are at pixel intersections, not centers.
     };
     loop {
         let slice = if increasing { slice_iter.next() } else { slice_iter.next_back() };
