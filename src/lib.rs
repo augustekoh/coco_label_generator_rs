@@ -298,10 +298,30 @@ struct AnnotationMetadata {
     view_id: ViewId,
     instance_id: InstanceId,
     bbox: Bboxx1y1x2y2,
+    category_id: CategoryId,
 }
 impl AnnotationMetadata {
-    fn new(scene_id: SceneId, view_id: ViewId, instance_id: InstanceId, bbox: Bboxx1y1x2y2) -> Self {
-        Self { scene_id, view_id, instance_id, bbox }
+    fn builder() -> AnnotationMetadataBuilder {
+        AnnotationMetadataBuilder::default()
+    }
+}
+#[derive(Default, Debug)]
+struct AnnotationMetadataBuilder {
+    pub scene_id: Option<SceneId>,
+    pub view_id: Option<ViewId>,
+    pub instance_id: Option<InstanceId>,
+    pub bbox: Option<Bboxx1y1x2y2>,
+    pub category_id: Option<CategoryId>,
+}
+impl AnnotationMetadataBuilder {
+    fn build(self) -> AnnotationMetadata {
+        AnnotationMetadata {
+            scene_id: self.scene_id.expect("scene_id is not set."),
+            view_id: self.view_id.expect("view_id is not set."),
+            instance_id: self.instance_id.expect("instance_id is not set."),
+            bbox: self.bbox.expect("bbox is not set."),
+            category_id: self.category_id.expect("category_id is not set."),
+        }
     }
 }
 #[derive(Debug, Serialize)]
@@ -310,10 +330,11 @@ struct AnnotationMetadataSerde {
     image_id: usize,
     instance_id: InstanceId,
     bbox: Bboxx1y1x2y2,
+    category_id: CategoryId,
 }
 impl AnnotationMetadataSerde {
     fn from_ann(value: AnnotationMetadata, id: usize, image_id: usize) -> Self {
-        Self { id, image_id, instance_id: value.instance_id, bbox: value.bbox }
+        Self { id, image_id, instance_id: value.instance_id, bbox: value.bbox, category_id: value.category_id }
     }
 }
 
@@ -325,7 +346,6 @@ struct ViewMetadata {
     visible: HashMap<InstanceId, AnnotationMetadata>,
     height: usize,
     width: usize,
-    category_id: CategoryId,
 }
 impl ViewMetadata {
     pub fn builder() -> ViewMetadataBuilder {
@@ -351,7 +371,6 @@ impl ViewMetadataBuilder {
             visible: self.visible.expect("visible is not set."),
             height: self.height.expect("height is not set."),
             width: self.width.expect("width is not set."),
-            category_id: self.category_id.expect("category_id is not set."),
         }
     }
 }
@@ -361,12 +380,10 @@ struct ViewMetadataSerde {
     file_name: PathBuf,
     height: usize,
     width: usize,
-    category_id: CategoryId,
 }
 impl ViewMetadataSerde {
     fn from_view(value: ViewMetadata, id: usize) -> Self {
-        Self { id, file_name: value.rgb_relpath, height: value.height, width: value.width,
-               category_id: value.category_id }
+        Self { id, file_name: value.rgb_relpath, height: value.height, width: value.width }
     }
 }
 
@@ -440,8 +457,13 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
         let mut visible_map = HashMap::new();
         for id in visible.iter() {
             let bbox = bounding_box(&arr, &InstancesObjectsValue::Object(*id));
-            let ann = AnnotationMetadata::new(scene.id, view.id, *id, bbox);
-            visible_map.insert(*id, ann);
+            let mut ann_builder = AnnotationMetadata::builder();
+            ann_builder.scene_id.replace(scene.id);
+            ann_builder.view_id.replace(view.id);
+            ann_builder.instance_id.replace(*id);
+            ann_builder.bbox.replace(bbox);
+            ann_builder.category_id.replace(FOREGROUND_CATEGORY_ID);
+            visible_map.insert(*id, ann_builder.build());
         }
         check_count_in_csv(
             &view,
@@ -457,7 +479,6 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
         view_builder.width.replace(arr.ncols());
         view_builder.scene_id.replace(scene.id);
         view_builder.id.replace(view.id);
-        view_builder.category_id.replace(FOREGROUND_CATEGORY_ID);
         view_metadata.lock().unwrap().push(view_builder.build());
     }
 }
