@@ -361,10 +361,12 @@ struct ViewMetadataSerde {
     file_name: PathBuf,
     height: usize,
     width: usize,
+    category_id: CategoryId,
 }
 impl ViewMetadataSerde {
     fn from_view(value: ViewMetadata, id: usize) -> Self {
-        Self { id, file_name: value.rgb_relpath, height: value.height, width: value.width }
+        Self { id, file_name: value.rgb_relpath, height: value.height, width: value.width,
+               category_id: value.category_id }
     }
 }
 
