@@ -484,7 +484,7 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
             ann_builder.instance_id.replace(*id);
             ann_builder.bbox.replace(bbox);
             ann_builder.category_id.replace(FOREGROUND_CATEGORY_ID);
-            ann_builder.area.replace(Area::new(0.0));
+            ann_builder.area.replace(Area::new(0.1));
             visible_map.insert(*id, ann_builder.build());
         }
         check_count_in_csv(
