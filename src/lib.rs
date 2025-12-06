@@ -349,10 +349,12 @@ struct AnnotationMetadataSerde {
     instance_id: InstanceId,
     bbox: Bboxx1y1x2y2,
     category_id: CategoryId,
+    area: Area,
 }
 impl AnnotationMetadataSerde {
     fn from_ann(value: AnnotationMetadata, id: usize, image_id: usize) -> Self {
-        Self { id, image_id, instance_id: value.instance_id, bbox: value.bbox, category_id: value.category_id }
+        Self { id, image_id, instance_id: value.instance_id, bbox: value.bbox, category_id: value.category_id,
+               area: value.area }
     }
 }
 
