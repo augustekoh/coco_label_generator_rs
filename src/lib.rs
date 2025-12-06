@@ -15,16 +15,17 @@ use rayon::iter::ParallelIterator;
 use serde::Serialize;
 
 
-const OBJECT_VIEW_BACKGROUND_VALUE: usize = 0;
-
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
 enum InstancesObjectsValue {
     Background,
     Object(InstanceId),
 }
+impl InstancesObjectsValue {
+    const BACKGROUND_RAW_VALUE: usize = 0;
+}
 impl From<usize> for InstancesObjectsValue {
     fn from(value: usize) -> Self {
-        if value == OBJECT_VIEW_BACKGROUND_VALUE {
+        if value == Self::BACKGROUND_RAW_VALUE {
             Self::Background
         } else {
             Self::Object(InstanceId::new(value))
@@ -68,8 +69,10 @@ impl ViewId {
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Ord, PartialOrd, Serialize)]
 #[serde(transparent)]
 struct CategoryId { inner: usize }
-const BACKGROUND_CATEGORY_ID: CategoryId = CategoryId { inner: 0 };
-const FOREGROUND_CATEGORY_ID: CategoryId = CategoryId { inner: 1 };
+impl CategoryId {
+    pub const BACKGROUND: Self = Self { inner: 0 };
+    pub const FOREGROUND: Self = Self { inner: 1 };
+}
 
 #[derive(PartialEq, Clone, Copy, Debug, PartialOrd, Serialize)]
 #[serde(transparent)]
@@ -298,8 +301,8 @@ fn generate_json<T: rand::Rng>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: 
         "licenses": [],
         "images": views_metadata_serde,
         "categories": [
-            {"supercategory": "background", "id": BACKGROUND_CATEGORY_ID, "name": "background"},
-            {"supercategory": "foreground", "id": FOREGROUND_CATEGORY_ID, "name": "foreground"}
+            {"supercategory": "background", "id": CategoryId::BACKGROUND, "name": "background"},
+            {"supercategory": "foreground", "id": CategoryId::FOREGROUND, "name": "foreground"}
         ],
         "annotations": annotations_metadata_serde
     });
@@ -483,7 +486,7 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
             ann_builder.view_id.replace(view.id);
             ann_builder.instance_id.replace(*id);
             ann_builder.bbox.replace(bbox);
-            ann_builder.category_id.replace(FOREGROUND_CATEGORY_ID);
+            ann_builder.category_id.replace(CategoryId::FOREGROUND);
             ann_builder.area.replace(areas[&inst_obj_val]);
             visible_map.insert(*id, ann_builder.build());
         }
