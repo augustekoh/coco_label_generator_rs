@@ -146,6 +146,7 @@ dependencies = [
  "indicatif",
  "ndarray",
  "ndarray-npy",
+ "num-traits",
  "ordered-float",
  "rand",
  "rand_pcg",

@@ -17,7 +17,7 @@ use serde::Serialize;
 
 const OBJECT_VIEW_BACKGROUND_VALUE: usize = 0;
 
-#[derive(Eq, PartialEq, Hash, Clone, Copy)]
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
 enum InstancesObjectsValue {
     Background,
     Object(InstanceId),
@@ -70,6 +70,21 @@ impl ViewId {
 struct CategoryId { inner: usize }
 const BACKGROUND_CATEGORY_ID: CategoryId = CategoryId { inner: 0 };
 const FOREGROUND_CATEGORY_ID: CategoryId = CategoryId { inner: 1 };
+
+#[derive(PartialEq, Clone, Copy, Debug, PartialOrd, Serialize)]
+#[serde(transparent)]
+struct Area { inner: f64 }
+impl Area {
+    fn new(a: f64) -> Self {
+        assert!(a.is_normal());
+        Self { inner: a }
+    }
+}
+impl<T: num_traits::cast::ToPrimitive> From<T> for Area {
+    fn from(value: T) -> Self {
+        Self { inner: value.to_f64().unwrap() }
+    }
+}
 
 #[derive(Serialize, Debug)]
 #[serde(transparent)]
@@ -299,6 +314,7 @@ struct AnnotationMetadata {
     instance_id: InstanceId,
     bbox: Bboxx1y1x2y2,
     category_id: CategoryId,
+    area: Area,
 }
 impl AnnotationMetadata {
     fn builder() -> AnnotationMetadataBuilder {
@@ -312,6 +328,7 @@ struct AnnotationMetadataBuilder {
     pub instance_id: Option<InstanceId>,
     pub bbox: Option<Bboxx1y1x2y2>,
     pub category_id: Option<CategoryId>,
+    pub area: Option<Area>,
 }
 impl AnnotationMetadataBuilder {
     fn build(self) -> AnnotationMetadata {
@@ -321,6 +338,7 @@ impl AnnotationMetadataBuilder {
             instance_id: self.instance_id.expect("instance_id is not set."),
             bbox: self.bbox.expect("bbox is not set."),
             category_id: self.category_id.expect("category_id is not set."),
+            area: self.area.expect("area is not set."),
         }
     }
 }
@@ -399,6 +417,14 @@ impl Bboxx1y1x2y2 {
     fn bulider() -> Bboxx1y1x2y2Builder {
         Bboxx1y1x2y2Builder::default()
     }
+    // fn area(&self) -> Area {
+    //     let dx = self.x2.checked_sub(self.x1).unwrap();
+    //     let dy = self.y2.checked_sub(self.y1).unwrap();
+    //     let area = dx.checked_mul(dy).unwrap();
+    //     let area_f = area as f64;
+    //     assert_eq!(area_f as usize, area);
+    //     Area::new(area_f)
+    // }
 }
 #[derive(Debug, Serialize)]
 struct Bboxx1y1x2y2Serde(f64, f64, f64, f64);
@@ -455,14 +481,17 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
             r
         });
         let mut visible_map = HashMap::new();
+        let areas = areas(&arr);
         for id in visible.iter() {
-            let bbox = bounding_box(&arr, &InstancesObjectsValue::Object(*id));
+            let inst_obj_val = InstancesObjectsValue::Object(*id);
+            let bbox = bounding_box(&arr, &inst_obj_val);
             let mut ann_builder = AnnotationMetadata::builder();
             ann_builder.scene_id.replace(scene.id);
             ann_builder.view_id.replace(view.id);
             ann_builder.instance_id.replace(*id);
             ann_builder.bbox.replace(bbox);
             ann_builder.category_id.replace(FOREGROUND_CATEGORY_ID);
+            ann_builder.area.replace(*areas.get(&inst_obj_val).unwrap());
             visible_map.insert(*id, ann_builder.build());
         }
         check_count_in_csv(
@@ -530,4 +559,17 @@ fn find_single_bbox_coord<T: Eq>(arr: &Array2<T>, target: &T, axis: usize, incre
             idx.checked_sub(1)
         }.unwrap();
     }
+}
+
+fn areas(arr: &Array2<InstancesObjectsValue>) -> HashMap<InstancesObjectsValue, Area> {
+    let mut counts = HashMap::<_, u64>::new();
+    for value in arr.iter() {
+        let new_count = (*counts.entry(*value).or_insert(0)).checked_add(1).unwrap();
+        counts.insert(*value, new_count);
+    }
+    let mut areas = HashMap::new();
+    for (k, v) in counts.drain() {
+        areas.insert(k, v.into());
+    }
+    areas
 }
