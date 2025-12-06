@@ -380,7 +380,6 @@ struct ViewMetadataBuilder {
     pub visible: Option<HashMap<InstanceId, AnnotationMetadata>>,
     pub height: Option<usize>,
     pub width: Option<usize>,
-    pub category_id: Option<CategoryId>,
 }
 impl ViewMetadataBuilder {
     pub fn build(self) -> ViewMetadata {
@@ -419,14 +418,6 @@ impl Bboxx1y1x2y2 {
     fn bulider() -> Bboxx1y1x2y2Builder {
         Bboxx1y1x2y2Builder::default()
     }
-    // fn area(&self) -> Area {
-    //     let dx = self.x2.checked_sub(self.x1).unwrap();
-    //     let dy = self.y2.checked_sub(self.y1).unwrap();
-    //     let area = dx.checked_mul(dy).unwrap();
-    //     let area_f = area as f64;
-    //     assert_eq!(area_f as usize, area);
-    //     Area::new(area_f)
-    // }
 }
 #[derive(Debug, Serialize)]
 struct Bboxx1y1x2y2Serde(f64, f64, f64, f64);
@@ -440,7 +431,7 @@ impl From<Bboxx1y1x2y2> for Bboxx1y1x2y2Serde {
         assert_eq!(y1 as usize, value.y1);
         let y2 = value.y2 as f64;
         assert_eq!(y2 as usize, value.y2);
-        Self(x1, x2, y1, y2)
+        Self(x1, y1, x2, y2)
     }
 }
 #[derive(Default, Debug)]
