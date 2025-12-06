@@ -474,7 +474,7 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
             r
         });
         let mut visible_map = HashMap::new();
-        let areas = areas(&arr);
+        // let areas = areas(&arr);
         for id in visible.iter() {
             let inst_obj_val = InstancesObjectsValue::Object(*id);
             let bbox = bounding_box(&arr, &inst_obj_val);
@@ -484,7 +484,7 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
             ann_builder.instance_id.replace(*id);
             ann_builder.bbox.replace(bbox);
             ann_builder.category_id.replace(FOREGROUND_CATEGORY_ID);
-            ann_builder.area.replace(*areas.get(&inst_obj_val).unwrap());
+            ann_builder.area.replace(Area::new(0.0));
             visible_map.insert(*id, ann_builder.build());
         }
         check_count_in_csv(
