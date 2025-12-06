@@ -556,10 +556,8 @@ fn find_single_bbox_coord<T: Eq>(arr: &Array2<T>, target: &T, axis: usize, incre
 
 fn areas(arr: &Array2<InstancesObjectsValue>) -> HashMap<InstancesObjectsValue, Area> {
     let mut counts = HashMap::<_, u64>::new();
-    assert!(TryInto::<u64>::try_into(arr.len()).unwrap() < u64::MAX);
+    assert!(TryInto::<u64>::try_into(arr.len()).unwrap() <= u64::MAX);
     for value in arr.iter() {
-        // let new_count = (*counts.entry(*value).or_insert(0)).checked_add(1).unwrap();
-        // counts.insert(*value, new_count);
         *counts.entry(*value).or_insert(0) += 1;
     }
     let mut areas = HashMap::new();
