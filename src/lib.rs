@@ -558,9 +558,9 @@ fn areas(arr: &Array2<InstancesObjectsValue>) -> HashMap<InstancesObjectsValue, 
     let mut counts = HashMap::<_, u64>::new();
     assert!(TryInto::<u64>::try_into(arr.len()).unwrap() < u64::MAX);
     for value in arr.iter() {
-        let new_count = (*counts.entry(*value).or_insert(0)).checked_add(1).unwrap();
-        counts.insert(*value, new_count);
-        // *counts.entry(*value).or_insert(0) += 1;
+        // let new_count = (*counts.entry(*value).or_insert(0)).checked_add(1).unwrap();
+        // counts.insert(*value, new_count);
+        *counts.entry(*value).or_insert(0) += 1;
     }
     let mut areas = HashMap::new();
     for (k, v) in counts.drain() {
