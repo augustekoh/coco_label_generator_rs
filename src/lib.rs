@@ -60,10 +60,16 @@ impl SceneId {
     fn new(v: usize) -> Self { Self { inner: v } }
 }
 
-#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Serialize, Ord, PartialOrd)]
+#[serde(transparent)]
 struct ViewId { inner: usize }
 impl ViewId {
     fn new(v: usize) -> Self { Self { inner: v } }
+}
+impl<T: num_traits::cast::ToPrimitive + num_traits::sign::Unsigned + num_traits::int::PrimInt> From<T> for ViewId {
+    fn from(value: T) -> Self {
+        Self { inner: value.to_usize().unwrap() }
+    }
 }
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Ord, PartialOrd, Serialize)]
@@ -83,9 +89,9 @@ impl Area {
         Self { inner: a }
     }
 }
-impl<T: num_traits::cast::ToPrimitive> From<T> for Area {
+impl<T: num_traits::cast::ToPrimitive + num_traits::sign::Unsigned> From<T> for Area {
     fn from(value: T) -> Self {
-        Self { inner: value.to_f64().unwrap() }
+        Self::new(value.to_f64().unwrap())
     }
 }
 
@@ -374,7 +380,7 @@ where
                 image_id,
             ));
         }
-        views_metadata_serde.push(ViewMetadataSerde::from_view(view, image_id));
+        views_metadata_serde.push(ViewMetadataSerde::from_view(view, image_id.into()));
         image_id = image_id.checked_add(1).unwrap();
     }
     views_metadata_serde.shuffle(rng);
@@ -485,13 +491,13 @@ impl ViewMetadataBuilder {
 }
 #[derive(Debug, Serialize)]
 struct ViewMetadataSerde {
-    id: usize,
+    id: ViewId,
     file_name: PathBuf,
     height: usize,
     width: usize,
 }
 impl ViewMetadataSerde {
-    fn from_view(value: ViewMetadata, id: usize) -> Self {
+    fn from_view(value: ViewMetadata, id: ViewId) -> Self {
         Self { id, file_name: value.rgb_relpath, height: value.height, width: value.width }
     }
 }
