@@ -243,38 +243,53 @@ impl MultiProgressBar {
 
         let global_bar = ProgressBar::new(train_count.checked_add(val_count).unwrap().checked_add(test_count).unwrap())
             .with_style(style.clone())
-            .with_prefix("Overall");
+            .with_prefix("Overall          ");
         global_bar.enable_steady_tick(std::time::Duration::from_millis(50));
         let global_bar = multi_prog.add(global_bar);
 
         let train_bar = ProgressBar::new(train_count)
             .with_style(style.clone())
-            .with_prefix("Training subset");
+            .with_prefix("Training subset  ");
         train_bar.enable_steady_tick(std::time::Duration::from_millis(50));
-        let train_bar = multi_prog.add(train_bar);
 
         let val_bar = ProgressBar::new(val_count)
             .with_style(style.clone())
             .with_prefix("Validation subset");
         val_bar.enable_steady_tick(std::time::Duration::from_millis(50));
-        let val_bar = multi_prog.add(val_bar);
 
         let test_bar = ProgressBar::new(test_count)
             .with_style(style.clone())
-            .with_prefix("Testing subset");
+            .with_prefix("Testing subset   ");
         test_bar.enable_steady_tick(std::time::Duration::from_millis(50));
-        let test_bar = multi_prog.add(test_bar);
 
         Self { style, multi_prog, global_bar, train_bar, val_bar, test_bar }
     }
     fn inc_train_callback(&self) -> impl Fn() -> () {
-        || { self.train_bar.inc(1); self.global_bar.inc(1); }
+        || {
+            if self.train_bar.position() == 0 {
+                self.multi_prog.add(self.train_bar.clone());
+            }
+            self.train_bar.inc(1);
+            self.global_bar.inc(1);
+        }
     }
     fn inc_val_callback(&self) -> impl Fn() -> () {
-        || { self.val_bar.inc(1); self.global_bar.inc(1); }
+        || {
+            if self.val_bar.position() == 0 {
+                self.multi_prog.add(self.val_bar.clone());
+            }
+            self.val_bar.inc(1);
+            self.global_bar.inc(1);
+        }
     }
     fn inc_test_callback(&self) -> impl Fn() -> () {
-        || { self.test_bar.inc(1); self.global_bar.inc(1); }
+        || {
+            if self.test_bar.position() == 0 {
+                self.multi_prog.add(self.test_bar.clone());
+            }
+            self.test_bar.inc(1);
+            self.global_bar.inc(1);
+        }
     }
 }
 
