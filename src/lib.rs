@@ -1,10 +1,8 @@
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use ndarray::Array2;
 use ndarray_npy::NpzReader;
 use rand::seq::SliceRandom;
@@ -13,6 +11,12 @@ use rand_pcg::Pcg64Mcg;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use serde::Serialize;
+
+use crate::bar::MultiProgressBar;
+use crate::data_split::TrainValTestSplit;
+
+mod bar;
+mod data_split;
 
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
@@ -104,70 +108,6 @@ impl From<bool> for IsCrowdBool {
     }
 }
 
-#[derive(Serialize, Debug)]
-#[serde(transparent)]
-struct Proportion {
-    inner: f64,
-}
-impl Proportion {
-    fn new(v: f64) -> Self {
-        if v.is_normal() && 0.0 <= v && v <= 1.0 {
-            Self { inner: v }
-        } else {
-            panic!("Unexpected input: {:?}", v);
-        }
-    }
-    fn value(&self) -> f64 {
-        self.inner
-    }
-}
-impl FromStr for Proportion {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let inner = s.parse::<f64>().map_err(|e| e.to_string())?;
-        Ok(Self::new(inner))
-    }
-}
-
-#[derive(Serialize)]
-pub struct TrainValTestSplit {
-    train: Proportion,
-    validation: Proportion,
-}
-impl TrainValTestSplit {
-    fn train_proportion(&self) -> f64 {
-        self.train.value()
-    }
-    fn validation_proportion(&self) -> f64 {
-        self.validation.value()
-    }
-    fn test_proportion(&self) -> f64 {
-        let result = 1.0 - self.train_proportion() - self.validation_proportion();
-        assert!(result.is_normal() || result == 0.0);
-        assert!(result <= 1.0);
-        result
-    }
-}
-impl FromStr for TrainValTestSplit {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut vec = s.split(":").map(str::parse).collect::<Result<Vec<f64>, _>>()
-            .map_err(|e| e.to_string())?;
-        if vec.len() != 3 {
-            return Err(format!("Unexpected length: {}", vec.len()));
-        }
-        let mut v_iter = vec.drain(..);
-        let [Some(train), Some(validation), Some(test), None] =
-            [v_iter.next(), v_iter.next(), v_iter.next(), v_iter.next()] else {
-            panic!();
-        };
-        let total = train + validation + test;
-        let train = Proportion::new(train / total);
-        let validation = Proportion::new(validation / total);
-        Ok(Self { train, validation })
-    }
-}
-
 #[derive(Serialize)]
 pub struct Config {
     pub exec_version: String,
@@ -227,67 +167,6 @@ impl View {
     }
     pub fn order_v2_csv_path(&self) -> &Path {
         self.order_v2_csv_path.as_path()
-    }
-}
-
-struct MultiProgressBar {
-    style: ProgressStyle,
-    multi_prog: MultiProgress,
-    global_bar: Option<ProgressBar>,
-    train_bar: Option<ProgressBar>,
-    val_bar: Option<ProgressBar>,
-    test_bar: Option<ProgressBar>,
-}
-impl MultiProgressBar {
-    pub fn new(train_count: u64, val_count: u64, test_count: u64) -> Self {
-        let style = ProgressStyle::with_template(
-            "{prefix} {spinner} {wide_bar} {pos}/{len} ({percent}%) \
-             [rate: {per_sec:2} | elapsed: {elapsed} | ETA: {eta}]")
-            .unwrap().progress_chars("█▉▊▋▌▍▎▏  ");
-        let multi_prog = MultiProgress::new();
-        let global_count = train_count.checked_add(val_count).unwrap().checked_add(test_count).unwrap();
-        let mut s = Self { style, multi_prog, global_bar: None, train_bar: None, val_bar: None, test_bar: None };
-        s.global_bar.replace(s.new_bar_with_count_and_prefix(global_count, "Overall          "));
-        s
-    }
-    pub fn new_bar_with_count_and_prefix(&self, count: u64, prefix: &str) -> ProgressBar {
-        let bar = self.multi_prog.add(
-            ProgressBar::new(count).with_style(self.style.clone()).with_prefix(prefix.to_string()));
-        bar.enable_steady_tick(std::time::Duration::from_millis(50));
-        bar
-    }
-    pub fn start_train_bar(&mut self, count: u64) {
-        self.train_bar = Some(self.multi_prog.add(self.new_bar_with_count_and_prefix(count, "Training subset  ")));
-    }
-    pub fn start_val_bar(&mut self, count: u64) {
-        self.val_bar = Some(self.multi_prog.add(self.new_bar_with_count_and_prefix(count, "Validation subset")));
-    }
-    pub fn start_test_bar(&mut self, count: u64) {
-        self.test_bar = Some(self.multi_prog.add(self.new_bar_with_count_and_prefix(count, "Testing subset   ")));
-    }
-    pub fn finish_train_bar(&self) {
-        self.train_bar.as_ref().expect("Did not start bar.").finish();
-    }
-    pub fn finish_val_bar(&self) {
-        self.val_bar.as_ref().expect("Did not start bar.").finish();
-    }
-    pub fn finish_test_bar(&self) {
-        self.test_bar.as_ref().expect("Did not start bar.").finish();
-    }
-    pub fn finish(&self) {
-        self.global_bar.as_ref().expect("Did not start bar.").finish();
-    }
-    pub fn inc_train_callback(&self) -> impl Fn() -> () {
-        || { self.train_bar.as_ref().expect("Did not start bar before callback.").inc(1);
-             self.global_bar.as_ref().unwrap().inc(1); }
-    }
-    pub fn inc_val_callback(&self) -> impl Fn() -> () {
-        || { self.val_bar.as_ref().expect("Did not start bar before callback.").inc(1);
-             self.global_bar.as_ref().unwrap().inc(1); }
-    }
-    pub fn inc_test_callback(&self) -> impl Fn() -> () {
-        || { self.test_bar.as_ref().expect("Did not start bar before callback.").inc(1);
-             self.global_bar.as_ref().unwrap().inc(1); }
     }
 }
 
@@ -374,11 +253,8 @@ where
         obj_list.sort_by_key(|a| (a.scene_id, a.view_id, a.instance_id));
         obj_list.shuffle(rng);
         for ann in obj_list {
-            annotations_metadata_serde.push(AnnotationMetadataSerde::from_ann(
-                ann,
-                annotations_metadata_serde.len(),
-                image_id,
-            ));
+            annotations_metadata_serde.push(
+                AnnotationMetadataSerde::from_ann(ann, annotations_metadata_serde.len(), image_id));
         }
         views_metadata_serde.push(ViewMetadataSerde::from_view(view, image_id.into()));
         image_id = image_id.checked_add(1).unwrap();
@@ -410,9 +286,7 @@ struct AnnotationMetadata {
     iscrowd: IsCrowdBool,
 }
 impl AnnotationMetadata {
-    fn builder() -> AnnotationMetadataBuilder {
-        AnnotationMetadataBuilder::default()
-    }
+    fn builder() -> AnnotationMetadataBuilder { AnnotationMetadataBuilder::default() }
 }
 #[derive(Default, Debug)]
 struct AnnotationMetadataBuilder {
@@ -464,9 +338,7 @@ struct ViewMetadata {
     width: usize,
 }
 impl ViewMetadata {
-    pub fn builder() -> ViewMetadataBuilder {
-        ViewMetadataBuilder::default()
-    }
+    pub fn builder() -> ViewMetadataBuilder { ViewMetadataBuilder::default() }
 }
 #[derive(Debug, Default)]
 struct ViewMetadataBuilder {
@@ -511,9 +383,7 @@ struct Bboxx1y1x2y2 {
     y2: usize,
 }
 impl Bboxx1y1x2y2 {
-    fn bulider() -> Bboxx1y1x2y2Builder {
-        Bboxx1y1x2y2Builder::default()
-    }
+    fn bulider() -> Bboxx1y1x2y2Builder { Bboxx1y1x2y2Builder::default() }
 }
 #[derive(Debug, Serialize)]
 struct Bboxx1y1x2y2Serde(f64, f64, f64, f64);
@@ -664,71 +534,4 @@ fn areas(arr: &Array2<InstancesObjectsValue>) -> HashMap<InstancesObjectsValue, 
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn small_areas() {
-        let b_ = InstancesObjectsValue::Background;
-        let f1 = InstancesObjectsValue::Object(InstanceId::new(1));
-        let f2 = InstancesObjectsValue::Object(InstanceId::new(2));
-        let f3 = InstancesObjectsValue::Object(InstanceId::new(3));
-        let arr: Array2<InstancesObjectsValue> = ndarray::array![
-            [b_, f1, f1, f1, f2, f1, f2],
-            [b_, f1, f1, f1, f2, b_, b_],
-            [f3, f1, f2, f3, f2, f1, f2],
-            [b_, f3, f3, f3, f1, f1, f1],
-        ];
-        let areas = areas(&arr);
-        assert_eq!(areas[&f1], Area::new(12.0));
-        assert_eq!(areas[&f2], Area::new(6.0));
-        assert_eq!(areas[&f3], Area::new(5.0));
-        assert_eq!(areas[&b_], Area::new(5.0));
-
-        assert_eq!(bounding_box(&arr, &f1),
-                   Bboxx1y1x2y2::bulider().set_x1(1).set_x2(7).set_y1(0).set_y2(4).build().unwrap());
-        assert_eq!(bounding_box(&arr, &f2),
-                   Bboxx1y1x2y2::bulider().set_x1(2).set_x2(7).set_y1(0).set_y2(3).build().unwrap());
-        assert_eq!(bounding_box(&arr, &f3),
-                   Bboxx1y1x2y2::bulider().set_x1(0).set_x2(4).set_y1(2).set_y2(4).build().unwrap());
-        assert_eq!(bounding_box(&arr, &b_),
-                   Bboxx1y1x2y2::bulider().set_x1(0).set_x2(7).set_y1(0).set_y2(4).build().unwrap());
-    }
-
-    #[test]
-    fn nano_areas() {
-        let b_ = InstancesObjectsValue::Background;
-        let f1 = InstancesObjectsValue::Object(InstanceId::new(1));
-        let f2 = InstancesObjectsValue::Object(InstanceId::new(2));
-        let f3 = InstancesObjectsValue::Object(InstanceId::new(3));
-        let f4 = InstancesObjectsValue::Object(InstanceId::new(4));
-        let f5 = InstancesObjectsValue::Object(InstanceId::new(5));
-        let arr: Array2<InstancesObjectsValue> = ndarray::array![
-            [b_, b_, b_, b_, f2, b_, b_],
-            [b_, f1, b_, b_, f2, b_, b_],
-            [b_, b_, b_, f3, b_, f4, b_],
-            [b_, b_, f3, b_, b_, f4, f5],
-        ];
-        let areas = areas(&arr);
-        assert_eq!(areas[&f1], Area::new(1.0));
-        assert_eq!(areas[&f2], Area::new(2.0));
-        assert_eq!(areas[&f3], Area::new(2.0));
-        assert_eq!(areas[&f4], Area::new(2.0));
-        assert_eq!(areas[&f5], Area::new(1.0));
-        assert_eq!(areas[&b_], Area::new(20.0));
-
-        assert_eq!(bounding_box(&arr, &f1),
-                   Bboxx1y1x2y2::bulider().set_x1(1).set_x2(2).set_y1(1).set_y2(2).build().unwrap());
-        assert_eq!(bounding_box(&arr, &f2),
-                   Bboxx1y1x2y2::bulider().set_x1(4).set_x2(5).set_y1(0).set_y2(2).build().unwrap());
-        assert_eq!(bounding_box(&arr, &f3),
-                   Bboxx1y1x2y2::bulider().set_x1(2).set_x2(4).set_y1(2).set_y2(4).build().unwrap());
-        assert_eq!(bounding_box(&arr, &f4),
-                   Bboxx1y1x2y2::bulider().set_x1(5).set_x2(6).set_y1(2).set_y2(4).build().unwrap());
-        assert_eq!(bounding_box(&arr, &f5),
-                   Bboxx1y1x2y2::bulider().set_x1(6).set_x2(7).set_y1(3).set_y2(4).build().unwrap());
-        assert_eq!(bounding_box(&arr, &b_),
-                   Bboxx1y1x2y2::bulider().set_x1(0).set_x2(7).set_y1(0).set_y2(4).build().unwrap());
-    }
-
-}
+mod tests;
