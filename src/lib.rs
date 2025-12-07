@@ -266,14 +266,17 @@ impl MultiProgressBar {
     pub fn start_test_bar(&mut self, count: u64) {
         self.test_bar = Some(self.multi_prog.add(self.new_bar_with_count_and_prefix(count, "Testing subset   ")));
     }
-    pub fn end_train_bar(&self) {
+    pub fn finish_train_bar(&self) {
         self.train_bar.as_ref().expect("Did not start bar.").finish();
     }
-    pub fn end_val_bar(&self) {
+    pub fn finish_val_bar(&self) {
         self.val_bar.as_ref().expect("Did not start bar.").finish();
     }
-    pub fn end_test_bar(&self) {
+    pub fn finish_test_bar(&self) {
         self.test_bar.as_ref().expect("Did not start bar.").finish();
+    }
+    pub fn finish(&self) {
+        self.global_bar.finish();
     }
     pub fn inc_train_callback(&self) -> impl Fn() -> () {
         || { self.train_bar.as_ref().expect("Did not start bar before callback.").inc(1); self.global_bar.inc(1); }
@@ -332,15 +335,17 @@ pub fn main(config: Config) {
     std::fs::create_dir_all(&config.output_dir_path).unwrap();
     std::fs::File::create_new(config.output_dir_path.join("config.json")).unwrap()
         .write(serde_json::to_string_pretty(&config).unwrap().as_bytes()).unwrap();
+
     multi_bar.start_train_bar(train_scenes.len().try_into().unwrap());
     generate_json(train_scenes, config.output_dir_path.join("train.json"), &mut rng, multi_bar.inc_train_callback());
-    multi_bar.end_train_bar();
+    multi_bar.finish_train_bar();
     multi_bar.start_val_bar(validation_scenes.len().try_into().unwrap());
     generate_json(validation_scenes, config.output_dir_path.join("valid.json"), &mut rng, multi_bar.inc_val_callback());
-    multi_bar.end_val_bar();
+    multi_bar.finish_val_bar();
     multi_bar.start_test_bar(test_scenes.len().try_into().unwrap());
     generate_json(test_scenes, config.output_dir_path.join("test.json"), &mut rng, multi_bar.inc_test_callback());
-    multi_bar.end_test_bar();
+    multi_bar.finish_test_bar();
+    multi_bar.finish();
 }
 
 fn generate_json<T: rand::Rng>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: &mut T,
