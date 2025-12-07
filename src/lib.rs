@@ -238,11 +238,8 @@ impl MultiProgressBar {
             "{prefix} {spinner} {wide_bar} {pos}/{len} ({percent}%) \
              [rate: {per_sec:2} | elapsed: {elapsed} | ETA: {eta}]")
             .unwrap().progress_chars("█▉▊▋▌▍▎▏  ");
-
         let multi_prog = MultiProgress::new();
-
         let global_count = train_count.checked_add(val_count).unwrap().checked_add(test_count).unwrap();
-
         let mut s = Self { style, multi_prog, global_bar: None, train_bar: None, val_bar: None, test_bar: None };
         s.global_bar.replace(s.new_bar_with_count_and_prefix(global_count, "Overall          "));
         s
