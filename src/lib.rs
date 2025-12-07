@@ -282,8 +282,8 @@ fn generate_json<T: rand::Rng>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: 
     let mut views_list = views_metadata.lock().unwrap();
     views_list.sort_by_key(|a| (a.scene_id, a.id));
     views_list.shuffle(rng);
-    for (view_idx, view) in views_list.drain(..).enumerate() {
-        if view_idx == usize::MAX { panic!(); }
+    let mut image_id: usize = 1;  // Start at 1 to be consistent with past format.
+    for view in views_list.drain(..) {
         let mut obj_list: Vec<AnnotationMetadata> = view.visible.iter().map(|(_, v)| v.clone()).collect();
         obj_list.sort_by_key(|a| (a.scene_id, a.view_id, a.instance_id));
         obj_list.shuffle(rng);
@@ -291,11 +291,14 @@ fn generate_json<T: rand::Rng>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: 
             annotations_metadata_serde.push(AnnotationMetadataSerde::from_ann(
                 ann,
                 annotations_metadata_serde.len(),
-                view_idx,
+                image_id,
             ));
         }
-        views_metadata_serde.push(ViewMetadataSerde::from_view(view, view_idx.checked_add(1).unwrap()));
+        views_metadata_serde.push(ViewMetadataSerde::from_view(view, image_id));
+        image_id = image_id.checked_add(1).unwrap();
     }
+    views_metadata_serde.shuffle(rng);
+    annotations_metadata_serde.shuffle(rng);
     let json_file_content = serde_json::json!({
         "info": {},
         "licenses": [],
