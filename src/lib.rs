@@ -344,8 +344,11 @@ pub fn main(config: Config) {
     multi_bar.finish();
 }
 
-fn generate_json<T: rand::Rng>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: &mut T,
-                               bar_callback: impl Fn() -> () + std::marker::Sync) {
+fn generate_json<T, U>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: &mut T, bar_callback: U)
+where
+    T: rand::Rng,
+    U: Fn() -> () + std::marker::Sync,
+{
     assert!(!out_json_path.exists());
     let views_metadata = Arc::new(Mutex::new(vec![]));
     rayon::ThreadPoolBuilder::new().build().unwrap().install(|| {
