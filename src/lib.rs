@@ -228,9 +228,9 @@ struct MultiProgressBar {
     style: ProgressStyle,
     multi_prog: MultiProgress,
     global_bar: ProgressBar,
-    train_bar: ProgressBar,
-    val_bar: ProgressBar,
-    test_bar: ProgressBar,
+    train_bar: Option<ProgressBar>,
+    val_bar: Option<ProgressBar>,
+    test_bar: Option<ProgressBar>,
 }
 impl MultiProgressBar {
     fn new(train_count: u64, val_count: u64, test_count: u64) -> Self {
@@ -241,55 +241,39 @@ impl MultiProgressBar {
 
         let multi_prog = MultiProgress::new();
 
-        let global_bar = ProgressBar::new(train_count.checked_add(val_count).unwrap().checked_add(test_count).unwrap())
-            .with_style(style.clone())
-            .with_prefix("Overall          ");
-        global_bar.enable_steady_tick(std::time::Duration::from_millis(50));
-        let global_bar = multi_prog.add(global_bar);
+        let global_bar = multi_prog.add(Self::new_bar_with_style_and_count_and_prefix(
+            style.clone(),
+            train_count.checked_add(val_count).unwrap().checked_add(test_count).unwrap(),
+            "Overall          ",
+        ));
 
-        let train_bar = ProgressBar::new(train_count)
-            .with_style(style.clone())
-            .with_prefix("Training subset  ");
-        train_bar.enable_steady_tick(std::time::Duration::from_millis(50));
-
-        let val_bar = ProgressBar::new(val_count)
-            .with_style(style.clone())
-            .with_prefix("Validation subset");
-        val_bar.enable_steady_tick(std::time::Duration::from_millis(50));
-
-        let test_bar = ProgressBar::new(test_count)
-            .with_style(style.clone())
-            .with_prefix("Testing subset   ");
-        test_bar.enable_steady_tick(std::time::Duration::from_millis(50));
-
-        Self { style, multi_prog, global_bar, train_bar, val_bar, test_bar }
+        Self { style, multi_prog, global_bar, train_bar: None, val_bar: None, test_bar: None }
+    }
+    fn new_bar_with_style_and_count_and_prefix(style: ProgressStyle, count: u64, prefix: &str) -> ProgressBar {
+        let bar = ProgressBar::new(count).with_style(style).with_prefix(prefix.to_string());
+        bar.enable_steady_tick(std::time::Duration::from_millis(50));
+        bar
+    }
+    fn new_bar_with_count_and_prefix(&self, count: u64, prefix: &str) -> ProgressBar {
+        Self::new_bar_with_style_and_count_and_prefix(self.style.clone(), count, prefix)
+    }
+    fn start_train_bar(&mut self, count: u64) {
+        self.train_bar = Some(self.multi_prog.add(self.new_bar_with_count_and_prefix(count, "Training subset  ")));
+    }
+    fn start_val_bar(&mut self, count: u64) {
+        self.val_bar = Some(self.multi_prog.add(self.new_bar_with_count_and_prefix(count, "Validation subset")));
+    }
+    fn start_test_bar(&mut self, count: u64) {
+        self.test_bar = Some(self.multi_prog.add(self.new_bar_with_count_and_prefix(count, "Testing subset   ")));
     }
     fn inc_train_callback(&self) -> impl Fn() -> () {
-        || {
-            if self.train_bar.position() == 0 {
-                self.multi_prog.add(self.train_bar.clone());
-            }
-            self.train_bar.inc(1);
-            self.global_bar.inc(1);
-        }
+        || { self.train_bar.as_ref().expect("Did not start bar before callback.").inc(1); self.global_bar.inc(1); }
     }
     fn inc_val_callback(&self) -> impl Fn() -> () {
-        || {
-            if self.val_bar.position() == 0 {
-                self.multi_prog.add(self.val_bar.clone());
-            }
-            self.val_bar.inc(1);
-            self.global_bar.inc(1);
-        }
+        || { self.val_bar.as_ref().expect("Did not start bar before callback.").inc(1); self.global_bar.inc(1); }
     }
     fn inc_test_callback(&self) -> impl Fn() -> () {
-        || {
-            if self.test_bar.position() == 0 {
-                self.multi_prog.add(self.test_bar.clone());
-            }
-            self.test_bar.inc(1);
-            self.global_bar.inc(1);
-        }
+        || { self.test_bar.as_ref().expect("Did not start bar before callback.").inc(1); self.global_bar.inc(1); }
     }
 }
 
@@ -330,7 +314,7 @@ pub fn main(config: Config) {
     let validation_scenes = scenes.split_off(train_validation_boundary_u);
     let train_scenes = scenes;
 
-    let multi_bar = MultiProgressBar::new(
+    let mut multi_bar = MultiProgressBar::new(
         train_scenes.len().try_into().unwrap(),
         validation_scenes.len().try_into().unwrap(),
         test_scenes.len().try_into().unwrap(),
@@ -339,8 +323,11 @@ pub fn main(config: Config) {
     std::fs::create_dir_all(&config.output_dir_path).unwrap();
     std::fs::File::create_new(config.output_dir_path.join("config.json")).unwrap()
         .write(serde_json::to_string_pretty(&config).unwrap().as_bytes()).unwrap();
+    multi_bar.start_train_bar(train_scenes.len().try_into().unwrap());
     generate_json(train_scenes, config.output_dir_path.join("train.json"), &mut rng, multi_bar.inc_train_callback());
+    multi_bar.start_train_bar(validation_scenes.len().try_into().unwrap());
     generate_json(validation_scenes, config.output_dir_path.join("valid.json"), &mut rng, multi_bar.inc_val_callback());
+    multi_bar.start_train_bar(test_scenes.len().try_into().unwrap());
     generate_json(test_scenes, config.output_dir_path.join("test.json"), &mut rng, multi_bar.inc_test_callback());
 }
 
