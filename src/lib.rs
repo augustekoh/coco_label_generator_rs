@@ -89,6 +89,15 @@ impl<T: num_traits::cast::ToPrimitive> From<T> for Area {
     }
 }
 
+#[derive(PartialEq, Clone, Copy, Debug, PartialOrd, Serialize)]
+#[serde(transparent)]
+struct IsCrowdBool { inner: u8 }
+impl From<bool> for IsCrowdBool {
+    fn from(value: bool) -> Self {
+        Self { inner: value.into() }
+    }
+}
+
 #[derive(Serialize, Debug)]
 #[serde(transparent)]
 struct Proportion {
@@ -321,6 +330,7 @@ struct AnnotationMetadata {
     bbox: Bboxx1y1x2y2,
     category_id: CategoryId,
     area: Area,
+    iscrowd: IsCrowdBool,
 }
 impl AnnotationMetadata {
     fn builder() -> AnnotationMetadataBuilder {
@@ -335,6 +345,7 @@ struct AnnotationMetadataBuilder {
     pub bbox: Option<Bboxx1y1x2y2>,
     pub category_id: Option<CategoryId>,
     pub area: Option<Area>,
+    pub iscrowd: Option<IsCrowdBool>,
 }
 impl AnnotationMetadataBuilder {
     fn build(self) -> AnnotationMetadata {
@@ -345,6 +356,7 @@ impl AnnotationMetadataBuilder {
             bbox: self.bbox.expect("bbox is not set."),
             category_id: self.category_id.expect("category_id is not set."),
             area: self.area.expect("area is not set."),
+            iscrowd: self.iscrowd.expect("iscrowd is not set."),
         }
     }
 }
@@ -356,11 +368,12 @@ struct AnnotationMetadataSerde {
     bbox: Bboxx1y1x2y2,
     category_id: CategoryId,
     area: Area,
+    iscrowd: IsCrowdBool,
 }
 impl AnnotationMetadataSerde {
     fn from_ann(value: AnnotationMetadata, id: usize, image_id: usize) -> Self {
         Self { id, image_id, instance_id: value.instance_id, bbox: value.bbox, category_id: value.category_id,
-               area: value.area }
+               area: value.area, iscrowd: value.iscrowd }
     }
 }
 
@@ -491,6 +504,7 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
             ann_builder.bbox.replace(bbox);
             ann_builder.category_id.replace(CategoryId::FOREGROUND);
             ann_builder.area.replace(areas[&inst_obj_val]);
+            ann_builder.iscrowd.replace(false.into());
             visible_map.insert(*id, ann_builder.build());
         }
         check_count_in_csv(
