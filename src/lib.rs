@@ -325,9 +325,9 @@ pub fn main(config: Config) {
         .write(serde_json::to_string_pretty(&config).unwrap().as_bytes()).unwrap();
     multi_bar.start_train_bar(train_scenes.len().try_into().unwrap());
     generate_json(train_scenes, config.output_dir_path.join("train.json"), &mut rng, multi_bar.inc_train_callback());
-    multi_bar.start_train_bar(validation_scenes.len().try_into().unwrap());
+    multi_bar.start_val_bar(validation_scenes.len().try_into().unwrap());
     generate_json(validation_scenes, config.output_dir_path.join("valid.json"), &mut rng, multi_bar.inc_val_callback());
-    multi_bar.start_train_bar(test_scenes.len().try_into().unwrap());
+    multi_bar.start_test_bar(test_scenes.len().try_into().unwrap());
     generate_json(test_scenes, config.output_dir_path.join("test.json"), &mut rng, multi_bar.inc_test_callback());
 }
 
