@@ -235,29 +235,33 @@ struct MultiProgressBar {
 impl MultiProgressBar {
     fn new(train_count: u64, val_count: u64, test_count: u64) -> Self {
         let style = ProgressStyle::with_template(
-            "{spinner} {wide_bar} {pos}/{len} ({percent}%) \
+            "{prefix} {spinner} {wide_bar} {pos}/{len} ({percent}%) \
              [rate: {per_sec:2} | elapsed: {elapsed} | ETA: {eta}]")
             .unwrap().progress_chars("█▉▊▋▌▍▎▏  ");
 
         let multi_prog = MultiProgress::new();
 
-        let global_bar = ProgressBar::new(train_count.checked_add(val_count).unwrap().checked_add(test_count).unwrap());
-        global_bar.set_style(style.clone());
+        let global_bar = ProgressBar::new(train_count.checked_add(val_count).unwrap().checked_add(test_count).unwrap())
+            .with_style(style.clone())
+            .with_prefix("Overall");
         global_bar.enable_steady_tick(std::time::Duration::from_millis(50));
         let global_bar = multi_prog.add(global_bar);
 
-        let train_bar = ProgressBar::new(train_count);
-        train_bar.set_style(style.clone());
+        let train_bar = ProgressBar::new(train_count)
+            .with_style(style.clone())
+            .with_prefix("Training subset");
         train_bar.enable_steady_tick(std::time::Duration::from_millis(50));
         let train_bar = multi_prog.add(train_bar);
 
-        let val_bar = ProgressBar::new(val_count);
-        val_bar.set_style(style.clone());
+        let val_bar = ProgressBar::new(val_count)
+            .with_style(style.clone())
+            .with_prefix("Validation subset");
         val_bar.enable_steady_tick(std::time::Duration::from_millis(50));
         let val_bar = multi_prog.add(val_bar);
 
-        let test_bar = ProgressBar::new(test_count);
-        test_bar.set_style(style.clone());
+        let test_bar = ProgressBar::new(test_count)
+            .with_style(style.clone())
+            .with_prefix("Testing subset");
         test_bar.enable_steady_tick(std::time::Duration::from_millis(50));
         let test_bar = multi_prog.add(test_bar);
 
