@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 
-use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use ndarray::Array2;
 use ndarray_npy::NpzReader;
 use rand::seq::SliceRandom;
@@ -224,6 +224,56 @@ impl View {
     }
 }
 
+struct MultiProgressBar {
+    style: ProgressStyle,
+    multi_prog: MultiProgress,
+    global_bar: ProgressBar,
+    train_bar: ProgressBar,
+    val_bar: ProgressBar,
+    test_bar: ProgressBar,
+}
+impl MultiProgressBar {
+    fn new(train_count: u64, val_count: u64, test_count: u64) -> Self {
+        let style = ProgressStyle::with_template(
+            "{spinner} {wide_bar} {pos}/{len} ({percent}%) \
+             [rate: {per_sec:2} | elapsed: {elapsed} | ETA: {eta}]")
+            .unwrap().progress_chars("█▉▊▋▌▍▎▏  ");
+
+        let multi_prog = MultiProgress::new();
+
+        let global_bar = ProgressBar::new(train_count.checked_add(val_count).unwrap().checked_add(test_count).unwrap());
+        global_bar.set_style(style.clone());
+        global_bar.enable_steady_tick(std::time::Duration::from_millis(50));
+        let global_bar = multi_prog.add(global_bar);
+
+        let train_bar = ProgressBar::new(train_count);
+        train_bar.set_style(style.clone());
+        train_bar.enable_steady_tick(std::time::Duration::from_millis(50));
+        let train_bar = multi_prog.add(train_bar);
+
+        let val_bar = ProgressBar::new(val_count);
+        val_bar.set_style(style.clone());
+        val_bar.enable_steady_tick(std::time::Duration::from_millis(50));
+        let val_bar = multi_prog.add(val_bar);
+
+        let test_bar = ProgressBar::new(test_count);
+        test_bar.set_style(style.clone());
+        test_bar.enable_steady_tick(std::time::Duration::from_millis(50));
+        let test_bar = multi_prog.add(test_bar);
+
+        Self { style, multi_prog, global_bar, train_bar, val_bar, test_bar }
+    }
+    fn inc_train_callback(&self) -> impl Fn() -> () {
+        || { self.train_bar.inc(1); self.global_bar.inc(1); }
+    }
+    fn inc_val_callback(&self) -> impl Fn() -> () {
+        || { self.val_bar.inc(1); self.global_bar.inc(1); }
+    }
+    fn inc_test_callback(&self) -> impl Fn() -> () {
+        || { self.test_bar.inc(1); self.global_bar.inc(1); }
+    }
+}
+
 pub fn main(config: Config) {
     assert!(!config.output_dir_path.exists());
     println!("{}", serde_json::to_string_pretty(&config).unwrap());
@@ -261,30 +311,29 @@ pub fn main(config: Config) {
     let validation_scenes = scenes.split_off(train_validation_boundary_u);
     let train_scenes = scenes;
 
+    let multi_bar = MultiProgressBar::new(
+        train_scenes.len().try_into().unwrap(),
+        validation_scenes.len().try_into().unwrap(),
+        test_scenes.len().try_into().unwrap(),
+    );
+
     std::fs::create_dir_all(&config.output_dir_path).unwrap();
     std::fs::File::create_new(config.output_dir_path.join("config.json")).unwrap()
         .write(serde_json::to_string_pretty(&config).unwrap().as_bytes()).unwrap();
-    generate_json(train_scenes, config.output_dir_path.join("train.json"), &mut rng);
-    generate_json(validation_scenes, config.output_dir_path.join("valid.json"), &mut rng);
-    generate_json(test_scenes, config.output_dir_path.join("test.json"), &mut rng);
+    generate_json(train_scenes, config.output_dir_path.join("train.json"), &mut rng, multi_bar.inc_train_callback());
+    generate_json(validation_scenes, config.output_dir_path.join("valid.json"), &mut rng, multi_bar.inc_val_callback());
+    generate_json(test_scenes, config.output_dir_path.join("test.json"), &mut rng, multi_bar.inc_test_callback());
 }
 
-fn generate_json<T: rand::Rng>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: &mut T) {
+fn generate_json<T: rand::Rng>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: &mut T,
+                               bar_callback: impl Fn() -> () + std::marker::Sync) {
     assert!(!out_json_path.exists());
     let views_metadata = Arc::new(Mutex::new(vec![]));
-    let bar = ProgressBar::new(scenes.len().try_into().unwrap());
-    bar.set_style(
-        ProgressStyle::with_template("{spinner} {wide_bar} {pos}/{len} ({percent}%) \
-                                     [rate: {per_sec:2} | elapsed: {elapsed} | ETA: {eta}]")
-            .unwrap()
-            .progress_chars("█▉▊▋▌▍▎▏  "));
-    bar.enable_steady_tick(std::time::Duration::from_millis(50));
     rayon::ThreadPoolBuilder::new().build().unwrap().install(|| {
         scenes
             .par_iter().panic_fuse()
             .map(|s| derive_view_metadata(s, Arc::clone(&views_metadata)))
-            .progress_with(bar)
-            .for_each(drop);
+            .for_each(|_| { bar_callback() });
     });
     let mut annotations_metadata_serde = vec![];
     let mut views_metadata_serde = vec![];
