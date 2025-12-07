@@ -233,7 +233,7 @@ struct MultiProgressBar {
     test_bar: Option<ProgressBar>,
 }
 impl MultiProgressBar {
-    fn new(train_count: u64, val_count: u64, test_count: u64) -> Self {
+    pub fn new(train_count: u64, val_count: u64, test_count: u64) -> Self {
         let style = ProgressStyle::with_template(
             "{prefix} {spinner} {wide_bar} {pos}/{len} ({percent}%) \
              [rate: {per_sec:2} | elapsed: {elapsed} | ETA: {eta}]")
@@ -254,25 +254,34 @@ impl MultiProgressBar {
         bar.enable_steady_tick(std::time::Duration::from_millis(50));
         bar
     }
-    fn new_bar_with_count_and_prefix(&self, count: u64, prefix: &str) -> ProgressBar {
+    pub fn new_bar_with_count_and_prefix(&self, count: u64, prefix: &str) -> ProgressBar {
         Self::new_bar_with_style_and_count_and_prefix(self.style.clone(), count, prefix)
     }
-    fn start_train_bar(&mut self, count: u64) {
+    pub fn start_train_bar(&mut self, count: u64) {
         self.train_bar = Some(self.multi_prog.add(self.new_bar_with_count_and_prefix(count, "Training subset  ")));
     }
-    fn start_val_bar(&mut self, count: u64) {
+    pub fn start_val_bar(&mut self, count: u64) {
         self.val_bar = Some(self.multi_prog.add(self.new_bar_with_count_and_prefix(count, "Validation subset")));
     }
-    fn start_test_bar(&mut self, count: u64) {
+    pub fn start_test_bar(&mut self, count: u64) {
         self.test_bar = Some(self.multi_prog.add(self.new_bar_with_count_and_prefix(count, "Testing subset   ")));
     }
-    fn inc_train_callback(&self) -> impl Fn() -> () {
+    pub fn end_train_bar(&self) {
+        self.train_bar.as_ref().expect("Did not start bar.").finish();
+    }
+    pub fn end_val_bar(&self) {
+        self.val_bar.as_ref().expect("Did not start bar.").finish();
+    }
+    pub fn end_test_bar(&self) {
+        self.test_bar.as_ref().expect("Did not start bar.").finish();
+    }
+    pub fn inc_train_callback(&self) -> impl Fn() -> () {
         || { self.train_bar.as_ref().expect("Did not start bar before callback.").inc(1); self.global_bar.inc(1); }
     }
-    fn inc_val_callback(&self) -> impl Fn() -> () {
+    pub fn inc_val_callback(&self) -> impl Fn() -> () {
         || { self.val_bar.as_ref().expect("Did not start bar before callback.").inc(1); self.global_bar.inc(1); }
     }
-    fn inc_test_callback(&self) -> impl Fn() -> () {
+    pub fn inc_test_callback(&self) -> impl Fn() -> () {
         || { self.test_bar.as_ref().expect("Did not start bar before callback.").inc(1); self.global_bar.inc(1); }
     }
 }
@@ -325,10 +334,13 @@ pub fn main(config: Config) {
         .write(serde_json::to_string_pretty(&config).unwrap().as_bytes()).unwrap();
     multi_bar.start_train_bar(train_scenes.len().try_into().unwrap());
     generate_json(train_scenes, config.output_dir_path.join("train.json"), &mut rng, multi_bar.inc_train_callback());
+    multi_bar.end_train_bar();
     multi_bar.start_val_bar(validation_scenes.len().try_into().unwrap());
     generate_json(validation_scenes, config.output_dir_path.join("valid.json"), &mut rng, multi_bar.inc_val_callback());
+    multi_bar.end_val_bar();
     multi_bar.start_test_bar(test_scenes.len().try_into().unwrap());
     generate_json(test_scenes, config.output_dir_path.join("test.json"), &mut rng, multi_bar.inc_test_callback());
+    multi_bar.end_test_bar();
 }
 
 fn generate_json<T: rand::Rng>(scenes: Vec<Scene>, out_json_path: PathBuf, rng: &mut T,
