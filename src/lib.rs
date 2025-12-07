@@ -227,7 +227,7 @@ impl View {
 struct MultiProgressBar {
     style: ProgressStyle,
     multi_prog: MultiProgress,
-    global_bar: ProgressBar,
+    global_bar: Option<ProgressBar>,
     train_bar: Option<ProgressBar>,
     val_bar: Option<ProgressBar>,
     test_bar: Option<ProgressBar>,
@@ -241,21 +241,17 @@ impl MultiProgressBar {
 
         let multi_prog = MultiProgress::new();
 
-        let global_bar = multi_prog.add(Self::new_bar_with_style_and_count_and_prefix(
-            style.clone(),
-            train_count.checked_add(val_count).unwrap().checked_add(test_count).unwrap(),
-            "Overall          ",
-        ));
+        let global_count = train_count.checked_add(val_count).unwrap().checked_add(test_count).unwrap();
 
-        Self { style, multi_prog, global_bar, train_bar: None, val_bar: None, test_bar: None }
-    }
-    fn new_bar_with_style_and_count_and_prefix(style: ProgressStyle, count: u64, prefix: &str) -> ProgressBar {
-        let bar = ProgressBar::new(count).with_style(style).with_prefix(prefix.to_string());
-        bar.enable_steady_tick(std::time::Duration::from_millis(50));
-        bar
+        let mut s = Self { style, multi_prog, global_bar: None, train_bar: None, val_bar: None, test_bar: None };
+        s.global_bar.replace(s.new_bar_with_count_and_prefix(global_count, "Overall          "));
+        s
     }
     pub fn new_bar_with_count_and_prefix(&self, count: u64, prefix: &str) -> ProgressBar {
-        Self::new_bar_with_style_and_count_and_prefix(self.style.clone(), count, prefix)
+        let bar = self.multi_prog.add(
+            ProgressBar::new(count).with_style(self.style.clone()).with_prefix(prefix.to_string()));
+        bar.enable_steady_tick(std::time::Duration::from_millis(50));
+        bar
     }
     pub fn start_train_bar(&mut self, count: u64) {
         self.train_bar = Some(self.multi_prog.add(self.new_bar_with_count_and_prefix(count, "Training subset  ")));
@@ -276,16 +272,19 @@ impl MultiProgressBar {
         self.test_bar.as_ref().expect("Did not start bar.").finish();
     }
     pub fn finish(&self) {
-        self.global_bar.finish();
+        self.global_bar.as_ref().expect("Did not start bar.").finish();
     }
     pub fn inc_train_callback(&self) -> impl Fn() -> () {
-        || { self.train_bar.as_ref().expect("Did not start bar before callback.").inc(1); self.global_bar.inc(1); }
+        || { self.train_bar.as_ref().expect("Did not start bar before callback.").inc(1);
+             self.global_bar.as_ref().unwrap().inc(1); }
     }
     pub fn inc_val_callback(&self) -> impl Fn() -> () {
-        || { self.val_bar.as_ref().expect("Did not start bar before callback.").inc(1); self.global_bar.inc(1); }
+        || { self.val_bar.as_ref().expect("Did not start bar before callback.").inc(1);
+             self.global_bar.as_ref().unwrap().inc(1); }
     }
     pub fn inc_test_callback(&self) -> impl Fn() -> () {
-        || { self.test_bar.as_ref().expect("Did not start bar before callback.").inc(1); self.global_bar.inc(1); }
+        || { self.test_bar.as_ref().expect("Did not start bar before callback.").inc(1);
+             self.global_bar.as_ref().unwrap().inc(1); }
     }
 }
 
