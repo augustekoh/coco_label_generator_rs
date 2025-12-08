@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5.53", features = ["cargo", "string"] }
 csv = "1.4.0"
+getset = "0.1.6"
 git-version = "0.3.9"
 indicatif = { version = "0.18.3", features = ["rayon"] }
 ndarray = "0.16.1"

@@ -1,6 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::collections::HashMap;
 
+use getset::{Getters, CopyGetters, WithSetters};
 use serde::Serialize;
 
 use crate::instance::{AnnotationMetadata, InstanceId};
@@ -18,11 +19,16 @@ impl<T: num_traits::cast::ToPrimitive + num_traits::sign::Unsigned + num_traits:
         Self { inner: value.to_usize().unwrap() }
     }
 }
+#[derive(Debug, Getters, CopyGetters)]
 pub struct View {
+    #[getset(get_copy = "pub")]
     id: ViewId,
+    #[getset(get = "pub")]
     rgb_path: PathBuf,
+    #[getset(get = "pub")]
     npz_path: PathBuf,
     /// One entry per object, regardless of whether the object is visible.
+    #[getset(get = "pub")]
     order_v2_csv_path: PathBuf,
 }
 impl View {
@@ -36,41 +42,32 @@ impl View {
         let id = ViewId::new(cap[1].parse().unwrap());
         Self { id, rgb_path, npz_path, order_v2_csv_path }
     }
-    pub fn id(&self) -> ViewId { self.id }
-    pub fn rgb_path(&self) -> &Path {
-        self.rgb_path.as_path()
-    }
-    pub fn npz_path(&self) -> &Path {
-        self.npz_path.as_path()
-    }
-    pub fn order_v2_csv_path(&self) -> &Path {
-        self.order_v2_csv_path.as_path()
-    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Getters, CopyGetters)]
 pub struct ViewMetadata {
+    #[getset(get_copy = "pub")]
     scene_id: SceneId,
+    #[getset(get_copy = "pub")]
     id: ViewId,
     rgb_relpath: PathBuf,
+    #[getset(get = "pub")]
     visible: HashMap<InstanceId, AnnotationMetadata>,
     height: usize,
     width: usize,
 }
 impl ViewMetadata {
     pub fn builder() -> ViewMetadataBuilder { ViewMetadataBuilder::default() }
-    pub fn scene_id(&self) -> SceneId { self.scene_id }
-    pub fn id(&self) -> ViewId { self.id }
-    pub fn visible(&self) -> &HashMap<InstanceId, AnnotationMetadata> { &self.visible }
 }
-#[derive(Debug, Default)]
+#[derive(Debug, Default, WithSetters)]
+#[getset(set_with = "pub")]
 pub struct ViewMetadataBuilder {
-    pub scene_id: Option<SceneId>,
-    pub id: Option<ViewId>,
-    pub rgb_relpath: Option<PathBuf>,
-    pub visible: Option<HashMap<InstanceId, AnnotationMetadata>>,
-    pub height: Option<usize>,
-    pub width: Option<usize>,
+    scene_id: Option<SceneId>,
+    id: Option<ViewId>,
+    rgb_relpath: Option<PathBuf>,
+    visible: Option<HashMap<InstanceId, AnnotationMetadata>>,
+    height: Option<usize>,
+    width: Option<usize>,
 }
 impl ViewMetadataBuilder {
     pub fn build(self) -> ViewMetadata {

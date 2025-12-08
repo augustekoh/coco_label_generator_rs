@@ -158,31 +158,32 @@ fn derive_view_metadata(scene: &Scene, view_metadata: Arc<Mutex<Vec<ViewMetadata
         for id in visible.iter() {
             let inst_obj_val = InstancesObjectsValue::Object(*id);
             let bbox = bounding_box(&arr, &inst_obj_val);
-            let mut ann_builder = AnnotationMetadata::builder();
-            ann_builder.scene_id.replace(scene.id());
-            ann_builder.view_id.replace(view.id());
-            ann_builder.instance_id.replace(*id);
-            ann_builder.bbox.replace(bbox);
-            ann_builder.category_id.replace(CategoryId::FOREGROUND);
-            ann_builder.area.replace(areas[&inst_obj_val]);
-            ann_builder.iscrowd.replace(false.into());
-            visible_map.insert(*id, ann_builder.build());
+            let ann = AnnotationMetadata::builder()
+                .with_scene_id(Some(scene.id()))
+                .with_view_id(Some(view.id()))
+                .with_instance_id(Some(*id))
+                .with_bbox(Some(bbox))
+                .with_category_id(Some(CategoryId::FOREGROUND))
+                .with_area(Some(areas[&inst_obj_val]))
+                .with_iscrowd(Some(false.into()))
+                .build();
+            visible_map.insert(*id, ann);
         }
-        check_count_in_csv(
-            &view,
-            visible.iter().map(|e| (*e).into()).max().unwrap_or(0)
-        );
-        let parent_to_remove = view.rgb_path()
+        let low_bound_on_max_idx = visible.iter().map(|e| (*e).into()).max().unwrap_or(0);
+        check_count_in_csv(&view, low_bound_on_max_idx);
+        let parent_to_remove = view
+            .rgb_path()
             .parent().expect("Expected at least one parent.")
             .parent().unwrap_or(Path::new(""));
-        let mut view_builder = ViewMetadata::builder();
-        view_builder.rgb_relpath.replace(view.rgb_path().strip_prefix(parent_to_remove).unwrap().to_path_buf());
-        view_builder.visible.replace(visible_map);
-        view_builder.height.replace(arr.nrows());
-        view_builder.width.replace(arr.ncols());
-        view_builder.scene_id.replace(scene.id());
-        view_builder.id.replace(view.id());
-        view_metadata.lock().unwrap().push(view_builder.build());
+        let view = ViewMetadata::builder()
+            .with_rgb_relpath(Some(view.rgb_path().strip_prefix(parent_to_remove).unwrap().to_path_buf()))
+            .with_visible(Some(visible_map))
+            .with_height(Some(arr.nrows()))
+            .with_width(Some(arr.ncols()))
+            .with_scene_id(Some(scene.id()))
+            .with_id(Some(view.id()))
+            .build();
+        view_metadata.lock().unwrap().push(view);
     }
 }
 

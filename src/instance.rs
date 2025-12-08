@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use getset::{CopyGetters, WithSetters};
 use ndarray::Array2;
 use serde::Serialize;
 
@@ -46,10 +47,13 @@ impl InstanceId {
     pub fn new(v: usize) -> Self { Self { inner: v } }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, CopyGetters)]
 pub struct AnnotationMetadata {
+    #[getset(get_copy = "pub")]
     scene_id: SceneId,
+    #[getset(get_copy = "pub")]
     view_id: ViewId,
+    #[getset(get_copy = "pub")]
     instance_id: InstanceId,
     bbox: Bboxx1y1x2y2,
     category_id: CategoryId,
@@ -58,19 +62,17 @@ pub struct AnnotationMetadata {
 }
 impl AnnotationMetadata {
     pub fn builder() -> AnnotationMetadataBuilder { AnnotationMetadataBuilder::default() }
-    pub fn scene_id(&self) -> SceneId { self.scene_id }
-    pub fn view_id(&self) -> ViewId { self.view_id }
-    pub fn instance_id(&self) -> InstanceId { self.instance_id }
 }
-#[derive(Default, Debug)]
+#[derive(Default, Debug, WithSetters)]
+#[getset(set_with = "pub")]
 pub struct AnnotationMetadataBuilder {
-    pub scene_id: Option<SceneId>,
-    pub view_id: Option<ViewId>,
-    pub instance_id: Option<InstanceId>,
-    pub bbox: Option<Bboxx1y1x2y2>,
-    pub category_id: Option<CategoryId>,
-    pub area: Option<Area>,
-    pub iscrowd: Option<IsCrowdBool>,
+    scene_id: Option<SceneId>,
+    view_id: Option<ViewId>,
+    instance_id: Option<InstanceId>,
+    bbox: Option<Bboxx1y1x2y2>,
+    category_id: Option<CategoryId>,
+    area: Option<Area>,
+    iscrowd: Option<IsCrowdBool>,
 }
 impl AnnotationMetadataBuilder {
     pub fn build(self) -> AnnotationMetadata {
