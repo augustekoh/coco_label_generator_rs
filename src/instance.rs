@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use ndarray::Array2;
 use serde::Serialize;
 
 use crate::scene::SceneId;
@@ -182,4 +185,49 @@ impl From<bool> for IsCrowdBool {
     fn from(value: bool) -> Self {
         Self { inner: value.into() }
     }
+}
+
+pub fn bounding_box<T: Eq>(arr: &Array2<T>, target: &T) -> Bboxx1y1x2y2 {
+    Bboxx1y1x2y2::builder()
+        .set_x1(find_single_bbox_coord(&arr, &target, 1, true).expect("col min not found."))
+        .set_x2(find_single_bbox_coord(&arr, &target, 1, false).expect("col max not found."))
+        .set_y1(find_single_bbox_coord(&arr, &target, 0, true).expect("row min not found."))
+        .set_y2(find_single_bbox_coord(&arr, &target, 0, false).expect("row max not found."))
+        .build().expect("Failed to build bbox.")
+}
+
+fn find_single_bbox_coord<T: Eq>(arr: &Array2<T>, target: &T, axis: usize, increasing: bool) -> Result<usize, ()> {
+    let axis = ndarray::Axis(axis);
+    let mut slice_iter = arr.axis_iter(axis);
+    let mut idx: usize = if increasing {
+        0
+    } else {
+        slice_iter.len()  // Intentionally starting at len so that the coords are at pixel intersections, not centers.
+    };
+    loop {
+        let slice = if increasing { slice_iter.next() } else { slice_iter.next_back() };
+        for v in slice.ok_or(())?.iter() {
+            if v == target {
+                return Ok(idx);
+            }
+        }
+        idx = if increasing {
+            idx.checked_add(1)
+        } else {
+            idx.checked_sub(1)
+        }.unwrap();
+    }
+}
+
+pub fn areas(arr: &Array2<InstancesObjectsValue>) -> HashMap<InstancesObjectsValue, Area> {
+    let mut counts = HashMap::<_, u64>::new();
+    assert!(TryInto::<u64>::try_into(arr.len()).unwrap() <= u64::MAX);
+    for value in arr.iter() {
+        *counts.entry(*value).or_insert(0) += 1;
+    }
+    let mut areas = HashMap::new();
+    for (k, v) in counts.drain() {
+        areas.insert(k, v.into());
+    }
+    areas
 }
