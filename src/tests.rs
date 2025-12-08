@@ -1,4 +1,9 @@
-use super::*;
+use ndarray::Array2;
+
+use crate::instance::{InstancesObjectsValue, InstanceId, Bboxx1y1x2y2, Area};
+use crate::bounding_box;
+use crate::areas;
+
 
 #[test]
 fn small_areas() {
@@ -19,13 +24,13 @@ fn small_areas() {
     assert_eq!(areas[&b_], Area::new(5.0));
 
     assert_eq!(bounding_box(&arr, &f1),
-               Bboxx1y1x2y2::bulider().set_x1(1).set_x2(7).set_y1(0).set_y2(4).build().unwrap());
+               Bboxx1y1x2y2::builder().set_x1(1).set_x2(7).set_y1(0).set_y2(4).build().unwrap());
     assert_eq!(bounding_box(&arr, &f2),
-               Bboxx1y1x2y2::bulider().set_x1(2).set_x2(7).set_y1(0).set_y2(3).build().unwrap());
+               Bboxx1y1x2y2::builder().set_x1(2).set_x2(7).set_y1(0).set_y2(3).build().unwrap());
     assert_eq!(bounding_box(&arr, &f3),
-               Bboxx1y1x2y2::bulider().set_x1(0).set_x2(4).set_y1(2).set_y2(4).build().unwrap());
+               Bboxx1y1x2y2::builder().set_x1(0).set_x2(4).set_y1(2).set_y2(4).build().unwrap());
     assert_eq!(bounding_box(&arr, &b_),
-               Bboxx1y1x2y2::bulider().set_x1(0).set_x2(7).set_y1(0).set_y2(4).build().unwrap());
+               Bboxx1y1x2y2::builder().set_x1(0).set_x2(7).set_y1(0).set_y2(4).build().unwrap());
 }
 
 #[test]
@@ -51,15 +56,15 @@ fn nano_areas() {
     assert_eq!(areas[&b_], Area::new(20.0));
 
     assert_eq!(bounding_box(&arr, &f1),
-               Bboxx1y1x2y2::bulider().set_x1(1).set_x2(2).set_y1(1).set_y2(2).build().unwrap());
+               Bboxx1y1x2y2::builder().set_x1(1).set_x2(2).set_y1(1).set_y2(2).build().unwrap());
     assert_eq!(bounding_box(&arr, &f2),
-               Bboxx1y1x2y2::bulider().set_x1(4).set_x2(5).set_y1(0).set_y2(2).build().unwrap());
+               Bboxx1y1x2y2::builder().set_x1(4).set_x2(5).set_y1(0).set_y2(2).build().unwrap());
     assert_eq!(bounding_box(&arr, &f3),
-               Bboxx1y1x2y2::bulider().set_x1(2).set_x2(4).set_y1(2).set_y2(4).build().unwrap());
+               Bboxx1y1x2y2::builder().set_x1(2).set_x2(4).set_y1(2).set_y2(4).build().unwrap());
     assert_eq!(bounding_box(&arr, &f4),
-               Bboxx1y1x2y2::bulider().set_x1(5).set_x2(6).set_y1(2).set_y2(4).build().unwrap());
+               Bboxx1y1x2y2::builder().set_x1(5).set_x2(6).set_y1(2).set_y2(4).build().unwrap());
     assert_eq!(bounding_box(&arr, &f5),
-               Bboxx1y1x2y2::bulider().set_x1(6).set_x2(7).set_y1(3).set_y2(4).build().unwrap());
+               Bboxx1y1x2y2::builder().set_x1(6).set_x2(7).set_y1(3).set_y2(4).build().unwrap());
     assert_eq!(bounding_box(&arr, &b_),
-               Bboxx1y1x2y2::bulider().set_x1(0).set_x2(7).set_y1(0).set_y2(4).build().unwrap());
+               Bboxx1y1x2y2::builder().set_x1(0).set_x2(7).set_y1(0).set_y2(4).build().unwrap());
 }
